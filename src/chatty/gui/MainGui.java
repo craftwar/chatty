@@ -51,6 +51,7 @@ import chatty.gui.components.menus.ContextMenuListener;
 import chatty.gui.components.menus.EmoteContextMenu;
 import chatty.gui.components.settings.NotificationSettings;
 import chatty.gui.components.settings.SettingsDialog;
+import chatty.gui.components.textpane.AutoModMessage;
 import chatty.gui.components.textpane.SubscriberMessage;
 import chatty.gui.notifications.Notification;
 import chatty.gui.notifications.NotificationActionListener;
@@ -1217,13 +1218,14 @@ public class MainGui extends JFrame implements Runnable {
                 User user = userInfoDialog.getUser();
                 String nick = user.getName();
                 String channel = userInfoDialog.getChannel();
-                String msgId = userInfoDialog.getTargetMsgId();
                 String reason = userInfoDialog.getBanReason();
                 if (!reason.isEmpty()) {
                     reason = " "+reason;
                 }
                 Parameters parameters = Parameters.create(nick+reason);
-                parameters.put("msg-id", msgId);
+                parameters.put("msg-id", userInfoDialog.getMsgId());
+                parameters.put("target-msg-id", userInfoDialog.getTargetMsgId());
+                parameters.put("automod-msg-id", userInfoDialog.getAutoModMsgId());
                 client.anonCustomCommand(channel, command, parameters);
             // Favorites Dialog
             } else if (favoritesDialog.getAction(source) == FavoritesDialog.BUTTON_ADD_FAVORITES) {
@@ -1415,10 +1417,10 @@ public class MainGui extends JFrame implements Runnable {
          * @param user 
          */
         @Override
-        public void userMenuItemClicked(ActionEvent e, User user) {
+        public void userMenuItemClicked(ActionEvent e, User user, String autoModMsgId) {
             String cmd = e.getActionCommand();
             if (cmd.equals("userinfo")) {
-                openUserInfoDialog(user, null);
+                openUserInfoDialog(user, null, autoModMsgId);
             }
             else if (cmd.equals("addressbookEdit")) {
                 openAddressbook(user.getName());
@@ -1459,6 +1461,10 @@ public class MainGui extends JFrame implements Runnable {
                 client.commandSetIgnored(user.getName(), "chat", false);
             } else  if (cmd.equals("unignoreWhisper")) {
                 client.commandSetIgnored(user.getName(), "whisper", false);
+            } else if (cmd.equals("autoModApprove")) {
+                client.api.autoModApprove(autoModMsgId);
+            } else if (cmd.equals("autoModDeny")) {
+                client.api.autoModDeny(autoModMsgId);
             } else {
                 nameBasedStuff(e, user.getName());
             }
@@ -1857,6 +1863,8 @@ public class MainGui extends JFrame implements Runnable {
 
     private class ChannelChangeListener implements ChangeListener {
         
+        private boolean openedFirstChannel = false;
+        
         /**
          * When the focus changes to a different channel (either by changing
          * a tab in the main window or changing focus to a different popout
@@ -1871,15 +1879,25 @@ public class MainGui extends JFrame implements Runnable {
             emotesDialog.updateStream(channels.getLastActiveChannel().getStreamName());
             moderationLog.setChannel(channels.getLastActiveChannel().getStreamName());
             autoModDialog.setChannel(channels.getLastActiveChannel().getStreamName());
+            if (!openedFirstChannel
+                    && channels.getLastActiveChannel().getType() == Channel.Type.CHANNEL) {
+                openedFirstChannel = true;
+                if (adminDialog.isVisible()) {
+                    openChannelAdminDialog();
+                }
+                if (followerDialog.isVisible()) {
+                    openFollowerDialog();
+                }
+            }
         }
     }
     
     private class MyUserListener implements UserListener {
         
         @Override
-        public void userClicked(User user, String messageId, MouseEvent e) {
+        public void userClicked(User user, String msgId, String autoModMsgId, MouseEvent e) {
             if (e == null || (!e.isControlDown() && !e.isAltDown())) {
-                openUserInfoDialog(user, messageId);
+                openUserInfoDialog(user, msgId, autoModMsgId);
                 return;
             }
             String command = client.settings.getString("commandOnCtrlClick");
@@ -1889,7 +1907,7 @@ public class MainGui extends JFrame implements Runnable {
             if (e.isControlDown() && !command.isEmpty()) {
                 client.command(user.getChannel(), command, user.getRegularDisplayNick());
             } else if (!e.isAltDown()) {
-                openUserInfoDialog(user, messageId);
+                openUserInfoDialog(user, msgId, autoModMsgId);
             }
         }
 
@@ -1962,7 +1980,7 @@ public class MainGui extends JFrame implements Runnable {
      * @param parameter
      * @return 
      */
-    public boolean commandGui(String command, String parameter) {
+    public boolean commandGui(String channel, String command, String parameter) {
         if (command.equals("settings")) {
             getSettingsDialog().showSettings();
         } else if (command.equals("customemotes")) {
@@ -1977,6 +1995,15 @@ public class MainGui extends JFrame implements Runnable {
             openChannelAdminDialog();
         } else if (command.equals("channelinfo")) {
             openChannelInfoDialog();
+        } else if (command.equals("userinfo")) {
+            User user = client.getExistingUser(channel, parameter);
+            if (user != null) {
+                openUserInfoDialog(user, null, null);
+            } else {
+                printSystem(String.format("User %s in %s not found",
+                        parameter,
+                        channel));
+            }
         } else if (command.equals("search")) {
             openSearchDialog();
         } else if (command.equals("insert")) {
@@ -2093,11 +2120,11 @@ public class MainGui extends JFrame implements Runnable {
      * Only call out of the EDT.
      * 
      * @param user
-     * @param messageId 
+     * @param msgId 
      */
-    public void openUserInfoDialog(User user, String messageId) {
+    public void openUserInfoDialog(User user, String msgId, String autoModMsgId) {
         windowStateManager.setWindowPosition(userInfoDialog, getActiveWindow());
-        userInfoDialog.show(getActiveWindow(), user, messageId, client.getUsername());
+        userInfoDialog.show(getActiveWindow(), user, msgId, autoModMsgId, client.getUsername());
     }
     
     private void openChannelInfoDialog() {
@@ -2513,7 +2540,7 @@ public class MainGui extends JFrame implements Runnable {
     
     public void printMessage(final String toChan, final User user,
             final String text, final boolean action, final String emotes,
-            final int bits2, final String id) {
+            final int origBits, final String id) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
@@ -2522,7 +2549,7 @@ public class MainGui extends JFrame implements Runnable {
                 boolean whisper = false;
                 
                 // Disable Cheer emotes altogether if disabled in the settings
-                int bits = bits2;
+                int bits = origBits;
                 if (client.settings.getString("cheersType").equals("none")) {
                     bits = 0;
                 }
@@ -2576,12 +2603,13 @@ public class MainGui extends JFrame implements Runnable {
                     notificationManager.highlight(user, text,
                             highlighter.getLastMatchNoNotification(),
                             highlighter.getLastMatchNoSound(),
-                            isOwnMessage);
+                            isOwnMessage, whisper, origBits > 0);
                 } else if (!ignored) {
                     if (whisper) {
                         notificationManager.whisper(user, text, isOwnMessage);
                     } else {
-                        notificationManager.message(user, text, isOwnMessage);
+                        notificationManager.message(user, text, isOwnMessage,
+                                origBits > 0);
                     }
                     if (!isOwnMessage) {
                         channels.setChannelNewMessage(chan);
@@ -2942,18 +2970,18 @@ public class MainGui extends JFrame implements Runnable {
             public void run() {
                 moderationLog.add(data);
                 autoModDialog.addData(data);
+                
                 String channel = Helper.toValidChannel(data.stream);
                 if (channels.isChannel(channel)) {
                     // Output directly to chat (if enabled)
-                    if (data.type == ModeratorActionData.Type.AUTOMOD_REJECTED) {
+                    if (data.type == ModeratorActionData.Type.AUTOMOD_REJECTED
+                            && data.args.size() > 1) {
                         // Automod
                         String username = data.args.get(0);
-                        String message = StringUtil.join(data.args, " ", 1);
+                        String message = data.args.get(1);
                         if (client.settings.getBoolean("showAutoMod")) {
-                            channels.getChannel(channel).printLine(
-                                    String.format("[AutoMod] <%s> %s",
-                                            username,
-                                            message));
+                            User user = client.getUser(channel, username);
+                            channels.getChannel(channel).printMessage(new AutoModMessage(user, message, data.msgId));
                         }
                         notificationManager.autoModMessage(channel, username, message);
                     } else if (!ownAction && client.settings.getBoolean("showModActions")) {
@@ -3324,7 +3352,7 @@ public class MainGui extends JFrame implements Runnable {
                 }
 
                 StreamInfo streamInfo = getStreamInfo(channel.getStreamName());
-                if (streamInfo.isValid()) {
+                if (streamInfo.isValidEnough()) {
                     if (streamInfo.getOnline()) {
                         
                         String uptime = "";

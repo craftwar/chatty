@@ -2,6 +2,7 @@
 package chatty.util.api;
 
 import chatty.Helper;
+import chatty.util.api.CommunitiesManager.CommunitiesListener;
 import chatty.util.api.CommunitiesManager.Community;
 import chatty.util.api.CommunitiesManager.CommunityListener;
 import chatty.util.api.CommunitiesManager.CommunityPutListener;
@@ -386,12 +387,37 @@ public class TwitchApi {
         }, channelName);
     }
     
+    public void setCommunities(String channelName, List<Community> communities,
+            CommunityPutListener listener) {
+        userIDs.getUserIDsAsap(r -> {
+            if (r.hasError()) {
+                listener.result("Failed getting user id");
+            } else {
+                List<String> communityIds = new ArrayList<>();
+                for (Community c : communities) {
+                    communityIds.add(c.getId());
+                }
+                requests.setCommunities(r.getId(channelName), communityIds, defaultToken, listener);
+            }
+        }, channelName);
+    }
+    
     public void getCommunityForChannel(String channelName, CommunityListener listener) {
         userIDs.getUserIDsAsap(r -> {
             if (r.hasError()) {
                 listener.received(null, "Error resolving id.");
             } else {
                 requests.getCommunity(r.getId(channelName), listener);
+            }
+        }, channelName);
+    }
+    
+    public void getCommunitiesForChannel(String channelName, CommunitiesListener listener) {
+        userIDs.getUserIDsAsap(r -> {
+            if (r.hasError()) {
+                listener.received(null, "Error resolving id.");
+            } else {
+                requests.getCommunities(r.getId(channelName), listener);
             }
         }, channelName);
     }
@@ -406,8 +432,12 @@ public class TwitchApi {
         }, stream);
     }
     
-    public void autoMod(String action, String msgId) {
-        requests.autoMod(action, msgId, defaultToken);
+    public void autoModApprove(String msgId) {
+        requests.autoMod("approve", msgId, defaultToken);
+    }
+    
+    public void autoModDeny(String msgId) {
+        requests.autoMod("deny", msgId, defaultToken);
     }
 
 }
