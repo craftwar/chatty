@@ -96,9 +96,9 @@ public class TwitchCommands {
         else if (command.equals("unmod")) {
             commandUnmod(channel, parameter);
         }
-        else if (command.equals("clear")) {
-            clearChannel(channel);
-        }
+        // else if (command.equals("clear")) {
+            // clearChannel(channel);
+        // }
         else if (command.equals("mods")) {
             mods(channel);
         }
