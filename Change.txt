@@ -1,0 +1,4 @@
+Changes made by caftwar
+
+Don't show "Own message ignored
+disable /clear, use .clear instead to prevent misusage(kvirc use /clear to clear window)
