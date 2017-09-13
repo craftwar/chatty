@@ -89,7 +89,7 @@ public class CommandSettings extends SettingsPanel {
         if (type.equals("userDialog")) {
             info += "<p><em>Note:</em> You can also add [help-commands:shortcuts shortcuts] in brackets, "
                     + "which can be triggered when the User Dialog has focus "
-                    + "(<code>/Ban[B]</code>).";
+                    + "(<code>/Ban[B]</code> or <code>Slap[B]=/me ..</code>).";
         }
         
         info += INFO_MORE;
@@ -221,11 +221,18 @@ public class CommandSettings extends SettingsPanel {
         if (command == null) {
             message += "No command.";
         } else if (command.hasError()) {
-            message += Helper.htmlspecialchars_encode(command.getError());
+            message += "<p style='font-family:monospaced;'>"
+                    + "Error: "+formatCommandInfo(command.getError())+"</p>";
         } else {
-            message += Helper.htmlspecialchars_encode(command.toString());
+            message += formatCommandInfo(command.toString());
         }
-        GuiUtil.showNonModalMessage(parent, "Custom Command", message, JOptionPane.INFORMATION_MESSAGE, true);
+        GuiUtil.showNonModalMessage(parent, "Custom Command", message,
+                JOptionPane.INFORMATION_MESSAGE, true);
+    }
+    
+    public static String formatCommandInfo(String input) {
+        return Helper.htmlspecialchars_encode(input)
+                .replace("\n", "<br />").replace(" ", "&nbsp;");
     }
     
 }

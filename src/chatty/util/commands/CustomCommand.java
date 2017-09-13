@@ -48,7 +48,7 @@ public class CustomCommand {
         return items.getIdentifiersWithPrefix(prefix);
     }
     
-    public String getCommand() {
+    public String getCommandName() {
         if (items != null && !items.isEmpty()) {
             Item firstToken = items.getItem(0);
             if (firstToken instanceof Literal) {
@@ -70,7 +70,7 @@ public class CustomCommand {
         try {
             return new CustomCommand(parser.parse());
         } catch (ParseException ex) {
-            return new CustomCommand("Error: "+ex.getLocalizedMessage());
+            return new CustomCommand(ex.getLocalizedMessage());
         }
     }
     
