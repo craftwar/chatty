@@ -96,6 +96,7 @@ public class TwitchCommands {
         else if (command.equals("unmod")) {
             commandUnmod(channel, parameter);
         }
+		// disable /clear, use .clear instead to prevent misusage(kvirc use /clear to clear window)
         // else if (command.equals("clear")) {
             // clearChannel(channel);
         // }
