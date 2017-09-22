@@ -302,7 +302,17 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
 
         Color color = message.color;
         boolean action = message.action;
-        String text = message.text;
+        // add SKLive pixiv tag [p][i] support
+        // [14:16] ?? (lemonken0805): [p]64970215[i]  (????SKLive??????????)
+        // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=64970215
+        String text = null;
+        int index_p = message.text.indexOf("[p]");
+        if (index_p != -1) {
+            int index_i = message.text.indexOf("[i]", index_p+3);
+            text = message.text + " https://www.pixiv.net/member_illust.php?mode=medium&illust_id=" + message.text.substring(index_p+3, index_i);
+        }
+        else
+            text = message.text;
         TagEmotes emotes = message.emotes;
         boolean highlighted = message.highlighted;
         if (message.whisper && message.action) {
