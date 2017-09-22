@@ -1,4 +1,4 @@
-
+﻿
 package chatty.gui.components.textpane;
 
 import chatty.gui.components.ChannelEditBox;
@@ -303,7 +303,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         Color color = message.color;
         boolean action = message.action;
         // add SKLive pixiv tag [p][i] support
-        // [14:16] ?? (lemonken0805): [p]64970215[i]  (????SKLive??????????)
+        // [14:16] 宅檸 (lemonken0805): [p]64970215[i]  (我沒在用SKLive，感謝大台主檸檬協助)
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=64970215
         String text = null;
         int index_p = message.text.indexOf("[p]");

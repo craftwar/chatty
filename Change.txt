@@ -1,4 +1,5 @@
-Changes made by caftwar
+﻿Changes made by caftwar
 
 Don't show "Own message ignored
 disable /clear, use .clear instead to prevent misusage(kvirc use /clear to clear window)
+add SKLive pixiv tag [p][i] support
