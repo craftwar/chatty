@@ -42,7 +42,7 @@ public class Chatty {
      * If you compile this program yourself, you should create your own client
      * id on http://www.twitch.tv/kraken/oauth2/clients/new
      */
-    public static final String CLIENT_ID = "spyiu9jqdnfjtwv6l1xjk5zgt8qb91l";
+    public static final String CLIENT_ID = "vs66nrabff4c5cn8o9gln8wzu4o75g";
     
     /**
      * The redirect URI for getting a token.
@@ -60,7 +60,7 @@ public class Chatty {
      * Enable Version Checker (if you compile and distribute this yourself, you
      * may want to disable this)
      */
-    public static final boolean VERSION_CHECK_ENABLED = true;
+    public static final boolean VERSION_CHECK_ENABLED = false;
     
     /**
      * The regular URL of the textfile where the most recent version is stored.
