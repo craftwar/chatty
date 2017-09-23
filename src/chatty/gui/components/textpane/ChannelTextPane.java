@@ -1,4 +1,4 @@
-﻿
+
 package chatty.gui.components.textpane;
 
 import chatty.gui.components.ChannelEditBox;
