@@ -304,6 +304,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         boolean action = message.action;
         // add SKLive pixiv tag [p][i] support
         // [14:16] 宅檸 (lemonken0805): [p]64970215[i]  (我沒在用SKLive，感謝大台主檸檬協助)
+		// [23:50] po246: [p] 65488924 [i]
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=64970215
         String text = null;
         int index_p=0, index_i=0;
@@ -312,7 +313,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             index_i = message.text.indexOf("[i]", index_p+3);
         }
         if ( index_p !=-1 && index_i !=-1)
-            text = message.text + " https://www.pixiv.net/member_illust.php?mode=medium&illust_id=" + message.text.substring(index_p+3, index_i);
+            text = message.text + " https://www.pixiv.net/member_illust.php?mode=medium&illust_id=" + message.text.substring(index_p+3, index_i).trim();
         else
             text = message.text;
         TagEmotes emotes = message.emotes;
