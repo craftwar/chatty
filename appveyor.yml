@@ -1,5 +1,10 @@
+version: '{build}'
+init:
+  - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
 environment:
-  PATH: C:\Program Files (x86)\Java\jdk1.8.0;%PATH%
+  JAVA_HOME: C:\Program Files\Java\jdk1.8.0 # may not need set for safety, gradlew use java from path first
+  APPVEYOR_RDP_PASSWORD:
+    secure: K6XkhLVN7PZDnWWtrTKYneDPMS7FgBFYYe1xuU2s8js=
 build_script:
 - cmd: gradlew release
 artifacts:
