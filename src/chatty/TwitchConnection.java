@@ -1,5 +1,6 @@
 package chatty;
 
+import chatty.gui.colors.UsercolorManager;
 import chatty.util.api.usericons.UsericonManager;
 import chatty.ChannelStateManager.ChannelStateListener;
 import chatty.util.BotNameManager;
@@ -128,10 +129,6 @@ public class TwitchConnection {
         return channelStates.getState(channel);
     }
     
-    public void setEmotesets(Map<Integer, String> emotesets) {
-        users.setEmotesets(emotesets);
-    }
-    
     public void setUsercolorManager(UsercolorManager m) {
         users.setUsercolorManager(m);
     }
@@ -154,6 +151,14 @@ public class TwitchConnection {
     
     public void setMaxReconnectionAttempts(long num) {
         this.maxReconnectionAttempts = num;
+    }
+    
+    public void setSpamProtection(String setting) {
+        spamProtection.setLinesPerSeconds(setting);
+    }
+    
+    public String getSpamProtectionInfo() {
+        return spamProtection.toString();
     }
     
     public User getUser(String channel, String name) {
@@ -953,7 +958,7 @@ public class TwitchConnection {
                 return;
             }
             String login = tags.get("login");
-            String text = tags.get("system-msg");
+            String text = StringUtil.removeLinebreakCharacters(tags.get("system-msg"));
             String emotes = tags.get("emotes");
             int months = tags.getInteger("msg-param-months", -1);
             if (StringUtil.isNullOrEmpty(login, text)) {
@@ -961,10 +966,21 @@ public class TwitchConnection {
             }
             User user = userJoined(channel, login);
             updateUserFromTags(user, tags);
-            if (tags.isValue("msg-id", "resub") || tags.isValue("msg-id", "sub")) {
+            if (tags.isValue("msg-id", "resub") || tags.isValue("msg-id", "sub")
+                    || tags.isValue("msg-id", "subgift")) {
                 listener.onSubscriberNotification(channel, user, text, message, months, emotes);
             } else if (tags.isValue("msg-id", "charity") && login.equals("twitch")) {
-                listener.onInfo(channel, text);
+                listener.onInfo(channel, "[Charity] "+text);
+            } else if (tags.isValue("msg-id", "raid")) {
+                String m = text;
+                if (!message.isEmpty()) {
+                    m += " ["+message+"]";
+                }
+                listener.onInfo(channel, "[Raid] "+m);
+            } else {
+                // Just output like this if unknown, since Twitch keeps adding
+                // new messages types for this
+                listener.onInfo(channel, "[Usernotice] "+text);
             }
         }
 

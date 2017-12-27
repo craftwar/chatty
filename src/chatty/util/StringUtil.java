@@ -2,6 +2,7 @@
 package chatty.util;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -35,6 +36,10 @@ public class StringUtil {
         return result;
     }
     
+    public static String join(String[] array) {
+        return join(Arrays.asList(array), ",");
+    }
+    
     public static String join(Collection<?> items, String delimiter) {
         return join(items, delimiter, -1, -1);
     }
@@ -44,7 +49,7 @@ public class StringUtil {
     }
     
     public static String join(Collection<?> items, String delimiter, int start, int end) {
-        if (items.isEmpty()) {
+        if (items == null || items.isEmpty()) {
             return "";
         }
         start = start > -1 ? start : 0;

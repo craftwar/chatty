@@ -1,6 +1,9 @@
 
 package chatty.gui.components.settings;
 
+import chatty.gui.GuiUtil;
+import chatty.gui.HtmlColors;
+import chatty.gui.LaF;
 import chatty.gui.MainGui;
 import chatty.gui.components.LinkLabel;
 import chatty.gui.components.LinkLabelListener;
@@ -8,6 +11,7 @@ import chatty.util.Sound;
 import chatty.util.settings.Setting;
 import chatty.util.settings.Settings;
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -49,7 +53,8 @@ public class SettingsDialog extends JDialog implements ActionListener {
             "tabOrder", "tabsMwheelScrolling", "tabsMwheelScrollingAnywhere", "inputFont",
             "bttvEmotes", "botNamesBTTV", "botNamesFFZ", "ffzEvent",
             "logPath", "logTimestamp", "logSplit", "logSubdirectories",
-            "tabsPlacement", "tabsLayout", "logLockFiles"
+            "tabsPlacement", "tabsLayout", "logLockFiles",
+            "laf", "lafTheme"
     ));
     
     private final Set<String> reconnectRequiredDef = new HashSet<>(Arrays.asList(
@@ -76,6 +81,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
     
     private final NotificationSettings notificationSettings;
     private final UsercolorSettings usercolorSettings;
+    private final MsgColorSettings msgColorSettings;
     private final ImageSettings imageSettings;
     private final HotkeySettings hotkeySettings;
     private final NameSettings nameSettings;
@@ -85,6 +91,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
     private static final String PANEL_EMOTES = "Emoticons";
     private static final String PANEL_USERICONS = "Usericons";
     private static final String PANEL_COLORS = "Colors";
+    private static final String PANEL_MSGCOLORS = "Msg Colors";
     private static final String PANEL_HIGHLIGHT = "Highlight";
     private static final String PANEL_IGNORE = "Ignore";
     private static final String PANEL_HISTORY = "History";
@@ -98,7 +105,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
     private static final String PANEL_OTHER = "Other";
     private static final String PANEL_ADVANCED = "Advanced";
     private static final String PANEL_HOTKEYS = "Hotkeys";
-    private static final String PANEL_COMPLETION = "Completion";
+    private static final String PANEL_COMPLETION = "TAB Completion";
     private static final String PANEL_CHAT = "Chat";
     private static final String PANEL_NAMES = "Names";
     private static final String PANEL_MODERATION = "Moderation";
@@ -119,6 +126,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
         PANEL_EMOTES,
         PANEL_USERICONS,
         PANEL_COLORS,
+        PANEL_MSGCOLORS,
         PANEL_USERCOLORS,
         PANEL_NAMES,
         PANEL_HIGHLIGHT,
@@ -175,7 +183,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
         selection.setSelectedIndex(0);
         selection.setSize(200, 200);
         Font defaultFont = selection.getFont();
-        selection.setFont(new Font(defaultFont.getFontName(), Font.BOLD, 12));
+        //selection.setFont(new Font(defaultFont.getFontName(), Font.BOLD, 12));
         selection.setFixedCellHeight(20);
         selection.setFixedCellWidth(100);
         selection.setBorder(BorderFactory.createEtchedBorder());
@@ -197,9 +205,11 @@ public class SettingsDialog extends JDialog implements ActionListener {
         cards.add(new EmoteSettings(this), PANEL_EMOTES);
         imageSettings = new ImageSettings(this);
         cards.add(imageSettings, PANEL_USERICONS);
-        cards.add(new ColorSettings(this), PANEL_COLORS);
+        cards.add(new ColorSettings(this, settings), PANEL_COLORS);
         cards.add(new HighlightSettings(this), PANEL_HIGHLIGHT);
         cards.add(new IgnoreSettings(this), PANEL_IGNORE);
+        msgColorSettings = new MsgColorSettings(this);
+        cards.add(msgColorSettings, PANEL_MSGCOLORS);
         cards.add(new HistorySettings(this), PANEL_HISTORY);
         cards.add(new SoundSettings(this), PANEL_SOUND);
         notificationSettings = new NotificationSettings(this, settings);
@@ -253,12 +263,18 @@ public class SettingsDialog extends JDialog implements ActionListener {
         gbc.weightx = 0.5;
         gbc.anchor = GridBagConstraints.EAST;
         gbc.insets = new Insets(4,3,8,8);
+        gbc.ipadx = 16;
+        gbc.ipady = 4;
+        ok.setMargin(GuiUtil.SMALL_BUTTON_INSETS);
         add(ok,gbc);
         cancel.setMnemonic(KeyEvent.VK_C);
         gbc = makeGbc(2,2,1,1);
         gbc.weightx = 0;
         gbc.anchor = GridBagConstraints.WEST;
         gbc.insets = new Insets(4,3,8,8);
+        gbc.ipadx = 16;
+        gbc.ipady = 4;
+        cancel.setMargin(GuiUtil.SMALL_BUTTON_INSETS);
         add(cancel,gbc);
         
         // Listeners
@@ -329,12 +345,20 @@ public class SettingsDialog extends JDialog implements ActionListener {
         loadBooleanSettings();
         loadListSettings();
         loadMapSettings();
+        updateBackgroundColor();
         usercolorSettings.setData(owner.getUsercolorData());
+        msgColorSettings.setData(owner.getMsgColorData());
         imageSettings.setData(owner.getUsericonData());
         imageSettings.setTwitchBadgeTypes(owner.getTwitchBadgeTypes());
         hotkeySettings.setData(owner.hotkeyManager.getActionsMap(),
                 owner.hotkeyManager.getData(), owner.hotkeyManager.globalHotkeysAvailable());
         notificationSettings.setData(owner.getNotificationData());
+    }
+    
+    public void updateBackgroundColor() {
+        Color color = HtmlColors.decode(getStringSetting("backgroundColor"));
+        usercolorSettings.setBackgroundColor(color);
+        msgColorSettings.setBackgroundColor(color);
     }
     
     /**
@@ -398,6 +422,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
         saveListSettings();
         saveMapSettings();
         owner.setUsercolorData(usercolorSettings.getData());
+        owner.setMsgColorData(msgColorSettings.getData());
         owner.setUsericonData(imageSettings.getData());
         owner.hotkeyManager.setData(hotkeySettings.getData());
         owner.setNotificationData(notificationSettings.getData());
@@ -728,6 +753,11 @@ public class SettingsDialog extends JDialog implements ActionListener {
     
     private void cancel() {
         Sound.setDeviceName(settings.getString("soundDevice"));
+        if (!settings.getString("laf").equals(stringSettings.get("laf").getSettingValue())
+                || !settings.getString("lafTheme").equals(stringSettings.get("lafTheme").getSettingValue())) {
+            LaF.setLookAndFeel(settings.getString("laf"), settings.getString("lafTheme"));
+            LaF.updateLookAndFeel();
+        }
         close();
     }
     

@@ -3,6 +3,9 @@ package chatty.gui;
 
 import chatty.Helper;
 import chatty.util.MiscUtil;
+import chatty.util.ProcessManager;
+import chatty.util.commands.CustomCommand;
+import chatty.util.commands.Parameters;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
@@ -242,49 +245,6 @@ public class GuiUtil {
         component.setFont(component.getFont().deriveFont(fontSize));
     }
     
-    public static void setLookAndFeel(String lafCode) {
-        try {
-            String laf = null;
-            switch (lafCode) {
-                case "system":
-                    laf = UIManager.getSystemLookAndFeelClassName();
-                    break;
-                case "jgwindows":
-                    laf = "com.jgoodies.looks.windows.WindowsLookAndFeel";
-                    break;
-                case "jgplastic":
-                    laf = "com.jgoodies.looks.plastic.PlasticLookAndFeel";
-                    break;
-                case "jgplastic3d":
-                    laf = "com.jgoodies.looks.plastic.Plastic3DLookAndFeel";
-                    break;
-                case "jgplasticxp":
-                    laf = "com.jgoodies.looks.plastic.PlasticXPLookAndFeel";
-                    break;
-                default:
-                    laf = UIManager.getCrossPlatformLookAndFeelClassName();
-            }
-            LOGGER.info("Setting LAF to " + laf);
-            UIManager.setLookAndFeel(laf);
-            addMacKeyboardActions();
-        } catch (Exception ex) {
-            LOGGER.warning("Failed setting LAF: "+ex);
-        }
-    }
-    
-    public static void updateLookAndFeel() {
-        for (Frame frame : Frame.getFrames()) {
-            updateLookAndFeel(frame);
-        }
-    }
-    
-    private static void updateLookAndFeel(Window window) {
-        for (Window childWindow : window.getOwnedWindows()) {
-            updateLookAndFeel(childWindow);
-        }
-        SwingUtilities.updateComponentTreeUI(window);
-    }
-    
     /**
      * Returns the current sort keys of the given table encoded in a String.
      * 
@@ -388,6 +348,18 @@ public class GuiUtil {
 
         // Other actions
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_A, KeyEvent.META_DOWN_MASK), DefaultEditorKit.selectAllAction);
+    }
+    
+    public static void showCommandNotification(String commandText, String title,
+            String message, String channel) {
+        CustomCommand command = CustomCommand.parse(commandText);
+
+        Parameters param = Parameters.create("");
+        param.put("title", title.replace("\"", "\\\""));
+        param.put("message", message.replace("\"", "\\\""));
+        param.put("channel", channel);
+
+        ProcessManager.execute(command.replace(param), "Notification");
     }
     
 }

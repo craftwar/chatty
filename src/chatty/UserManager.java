@@ -1,6 +1,7 @@
 
 package chatty;
 
+import chatty.gui.colors.UsercolorManager;
 import chatty.util.api.usericons.UsericonManager;
 import chatty.util.BotNameManager;
 import java.util.Map.Entry;
@@ -101,10 +102,6 @@ public class UserManager {
     
     public void setAddressbook(Addressbook addressbook) {
         this.addressbook = addressbook;
-    }
-    
-    public void setEmotesets(Map<Integer, String> newEmotesets) {
-        emotesets.putAll(newEmotesets);
     }
     
     public void setCustomNamesManager(CustomNames m) {

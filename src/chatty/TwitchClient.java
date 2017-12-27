@@ -1,6 +1,7 @@
 
 package chatty;
 
+import chatty.gui.colors.UsercolorManager;
 import chatty.gui.components.admin.StatusHistory;
 import chatty.util.commands.CustomCommands;
 import chatty.util.api.usericons.Usericon;
@@ -16,6 +17,7 @@ import chatty.util.api.TwitchApi;
 import chatty.Version.VersionListener;
 import chatty.WhisperManager.WhisperListener;
 import chatty.gui.GuiUtil;
+import chatty.gui.LaF;
 import chatty.gui.MainGui;
 import chatty.util.BTTVEmotes;
 import chatty.util.BotNameManager;
@@ -33,6 +35,7 @@ import chatty.util.StreamHighlightHelper;
 import chatty.util.StreamStatusWriter;
 import chatty.util.StringUtil;
 import chatty.util.TwitchEmotes;
+import chatty.util.TwitchEmotes.EmotesetInfo;
 import chatty.util.TwitchEmotes.TwitchEmotesListener;
 import chatty.util.Webserver;
 import chatty.util.api.AutoModCommandHelper;
@@ -267,7 +270,9 @@ public class TwitchClient {
         
         initDxSettings();
         
-        GuiUtil.setLookAndFeel(settings.getString("laf"));
+        LaF.setSettings(settings);
+        LaF.setLookAndFeel(settings.getString("laf"), settings.getString("lafTheme"));
+        GuiUtil.addMacKeyboardActions();
         
         // Create GUI
         LOGGER.info("Create GUI..");
@@ -671,6 +676,7 @@ public class TwitchClient {
             settings.setString("channel", channel);
         }
         api.requestUserId(Helper.toStream(autojoin));
+        api.getEmotesByStreams(Helper.toStream(autojoin));
         c.connect(server, ports, name, password, autojoin);
         return true;
     }
@@ -1138,6 +1144,8 @@ public class TwitchClient {
             g.addStreamInfo(testStreamInfo);
         } else if (command.equals("testspam")) {
             g.printLine("test" + spamProtection.getAllowance() + spamProtection.tryMessage());
+        } else if (command.equals("spamprotectioninfo")) {
+            g.printSystem("Spam Protection: "+c.getSpamProtectionInfo());
         } else if (command.equals("tsv")) {
             testStreamInfo.set("Title", "Game", Integer.parseInt(parameter), -1, StreamType.LIVE);
         } else if (command.equals("tsvs")) {
@@ -1568,7 +1576,9 @@ public class TwitchClient {
             g.printLine("Refreshing emoticons.. (this can take a few seconds)");
             refreshRequests.add("emoticons");
             //Emoticons.clearCache(Emoticon.Type.TWITCH);
-            api.requestEmoticons(true);
+            api.refreshEmotes();
+        } else if (parameter.equals("emoticons_old")) {
+            api.refreshEmotesOld();
         } else if (parameter.equals("bits")) {
             g.printLine("Refreshing bits..");
             refreshRequests.add("bits");
@@ -1602,7 +1612,7 @@ public class TwitchClient {
         } else if (parameter.equals("emotesets")) {
             g.printLine("Refreshing emoteset information..");
             refreshRequests.add("emotesets");
-            twitchemotes.requestEmotesets(true);
+            twitchemotes.refresh();
         } else {
             g.printLine("Usage: /refresh <type> (invalid type, see help)");
         }
@@ -2189,6 +2199,7 @@ public class TwitchClient {
         if (settings.getBoolean("bttvEmotes")) {
             bttvEmotes.requestEmotes(channel, false);
         }
+        api.getEmotesByStreams(Helper.toStream(channel));
     }
     
     private class EmoteListener implements EmoticonListener {
@@ -2215,13 +2226,13 @@ public class TwitchClient {
     private class TwitchemotesListener implements TwitchEmotesListener {
 
         @Override
-        public void emotesetsReceived(Map<Integer, String> emotesetStreams) {
+        public void emotesetsReceived(EmotesetInfo info) {
             if (refreshRequests.contains("emotesets")) {
                 g.printLine("Emoteset information updated.");
                 refreshRequests.remove("emotesets");
             }
-            g.setEmotesets(emotesetStreams);
-            c.setEmotesets(emotesetStreams);
+            g.setEmotesets(info);
+            api.setEmotesetInfo(info);
         }
         
     }
@@ -2234,6 +2245,7 @@ public class TwitchClient {
      */
     public void setLinesPerSeconds(String value) {
         spamProtection.setLinesPerSeconds(value);
+        c.setSpamProtection(value);
     }
     
     /**
@@ -2493,6 +2505,7 @@ public class TwitchClient {
         public void onSpecialUserUpdated() {
             g.updateEmotesDialog();
             g.updateEmoteNames();
+            api.getEmotesBySets(getSpecialUser().getEmoteSet());
         }
 
         @Override
