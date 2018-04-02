@@ -4,6 +4,7 @@ package chatty.gui.components.settings;
 import chatty.gui.GuiUtil;
 import chatty.gui.components.LinkLabel;
 import chatty.gui.components.LinkLabelListener;
+import chatty.lang.Language;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -38,15 +39,15 @@ import javax.swing.event.DocumentListener;
  * 
  * @author tduva
  */
-public class Editor {
+public class Editor implements StringEditor {
 
     private final JDialog dialog;
     private final JLabel label;
     private final JTextArea input;
-    private final JButton okButton = new JButton("Save");
-    private final JButton cancelButton = new JButton("Cancel");
-    private final JButton testButton = new JButton("Test");
-    private final JToggleButton toggleInfoButton = new JToggleButton("Help");
+    private final JButton okButton = new JButton(Language.getString("dialog.button.save"));
+    private final JButton cancelButton = new JButton(Language.getString("dialog.button.cancel"));
+    private final JButton testButton = new JButton(Language.getString("dialog.button.test"));
+    private final JToggleButton toggleInfoButton = new JToggleButton(Language.getString("dialog.button.help"));
     private final Window parent;
     private final LinkLabel info;
     
@@ -151,7 +152,7 @@ public class Editor {
      */
     public String showDialog(String title, String preset, String info) {
         input.setText(preset);
-        label.setText(title);
+        label.setText(title+":");
         this.info.setText(info);
         if (info == null) {
             this.info.setVisible(false);

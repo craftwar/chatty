@@ -3,9 +3,11 @@ package chatty;
 
 import chatty.gui.HtmlColors;
 import chatty.gui.WindowStateManager;
+import chatty.gui.components.settings.NotificationSettings;
 import chatty.gui.notifications.Notification;
 import chatty.util.BackupManager;
 import chatty.util.DateTime;
+import chatty.util.StringUtil;
 import chatty.util.hotkeys.Hotkey;
 import chatty.util.settings.Setting;
 import chatty.util.settings.Settings;
@@ -116,6 +118,7 @@ public class SettingsManager {
         addDefaultHotkeyAppWide("0.9b1", "about", "F1");
         settings.addList("hotkeys", getDefaultHotkeySettingValue(), Setting.LIST);
         settings.addBoolean("globalHotkeysEnabled", true);
+        settings.addBoolean("inputHistoryMultirowRequireCtrl", true);
         
 
         //===========
@@ -283,9 +286,11 @@ public class SettingsManager {
 
         // History / Favorites
         settings.addMap("channelHistory",new TreeMap(), Setting.LONG);
-        settings.setFile("channelHistory", historyFile);
+        //settings.setFile("channelHistory", historyFile);
         settings.addList("channelFavorites", new ArrayList(), Setting.STRING);
-        settings.setFile("channelFavorites", historyFile);
+        //settings.setFile("channelFavorites", historyFile);
+        settings.addMap("roomFavorites", new HashMap(), Setting.LIST);
+        //settings.setFile("roomFavorites", historyFile);
         settings.addLong("channelHistoryKeepDays", 30);
         settings.addBoolean("saveChannelHistory", true);
         settings.addBoolean("historyClear", true);
@@ -297,15 +302,15 @@ public class SettingsManager {
 
         // Game Presets
         settings.addList("gamesFavorites",new ArrayList(), Setting.STRING);
-        settings.setFile("gamesFavorites", historyFile);
+        //settings.setFile("gamesFavorites", historyFile);
         
         // Community Presets
         settings.addMap("communityFavorites", new HashMap(), Setting.STRING);
-        settings.setFile("communityFavorites", historyFile);
+        //settings.setFile("communityFavorites", historyFile);
 
         // Stream Status Presets
         settings.addList("statusPresets", new ArrayList(), Setting.LIST);
-        settings.setFile("statusPresets", statusPresetsFile);
+        //settings.setFile("statusPresets", statusPresetsFile);
 
         settings.addBoolean("saveStatusHistory", true);
         settings.addBoolean("statusHistoryClear", true);
@@ -359,7 +364,7 @@ public class SettingsManager {
         // Tabs
         settings.addString("tabOrder", "normal");
         settings.addBoolean("tabsMwheelScrolling", false);
-        settings.addBoolean("tabsMwheelScrollingAnywhere", false);
+        settings.addBoolean("tabsMwheelScrollingAnywhere", true);
         settings.addString("tabsPlacement", "top");
         settings.addString("tabsLayout", "wrap");
 
@@ -368,6 +373,7 @@ public class SettingsManager {
         settings.addLong("userlistWidth", 120);
         settings.addLong("userlistMinWidth", 0);
         settings.addBoolean("userlistEnabled", true);
+        settings.addBoolean("inputEnabled", true);
         settings.addLong("bufferSize", 500);
         settings.addMap("bufferSizes", new HashMap<>(), Setting.LONG);
 
@@ -411,9 +417,7 @@ public class SettingsManager {
         settings.addBoolean("ignoreOfflineNotifications", false);
         settings.addBoolean("requestFollowedStreams", true);
         
-        settings.addBoolean("useCustomNotifications", true);
-        
-        settings.addLong("nType", 0);
+        settings.addLong("nType", NotificationSettings.NOTIFICATION_TYPE_CUSTOM);
         settings.addLong("nScreen", -1);
         settings.addLong("nPosition", 3);
         settings.addLong("nDisplayTime", 10);
@@ -482,6 +486,7 @@ public class SettingsManager {
         settings.addBoolean("highlightNextMessages", false);
         settings.addBoolean("highlightIgnored", false);
         settings.addList("noHighlightUsers", new ArrayList(), Setting.STRING);
+        settings.addList("highlightBlacklist", new ArrayList(), Setting.STRING);
 
         // Ignore
         settings.addList("ignore", new ArrayList(), Setting.STRING);
@@ -495,6 +500,7 @@ public class SettingsManager {
 
         // Chat Logging
         settings.addString("logMode", "always");
+        settings.addBoolean("logMessage", true);
         settings.addBoolean("logMod", true);
         settings.addBoolean("logJoinPart", false);
         settings.addBoolean("logBan", true);
@@ -521,7 +527,7 @@ public class SettingsManager {
         settings.addBoolean("completionAllNameTypes", true);
         settings.addBoolean("completionPreferUsernames", true);
         settings.addBoolean("completionAllNameTypesRestriction", true);
-        settings.addString("completionTab", "names");
+        settings.addString("completionTab", "both");
         settings.addString("completionTab2", "emotes");
 
         // Stream Chat
@@ -662,8 +668,8 @@ public class SettingsManager {
                  */
                 settings.setString("timeoutButtons", null);
                 LOGGER.warning("Updated timeoutButtons setting to new default");
-            } else if (!value.toLowerCase(Locale.ENGLISH).contains("/ban") &&
-                    !value.toLowerCase(Locale.ENGLISH).contains("/unban")) {
+            } else if (!StringUtil.toLowerCase(value).contains("/ban") &&
+                    !StringUtil.toLowerCase(value).contains("/unban")) {
                 /**
                  * Setting wasn't on the old default value, but it doesn't
                  * contain /Ban or /Unban, so add those to the current
@@ -693,7 +699,7 @@ public class SettingsManager {
         }
         if (switchedFromVersionBefore("0.8.5b4")) {
             String currentValue = settings.getString("timeoutButtons");
-            if (!currentValue.toLowerCase().contains("/modunmod")) {
+            if (!StringUtil.toLowerCase(currentValue).contains("/modunmod")) {
                 settings.setString("timeoutButtons", currentValue+"\n/ModUnmod");
             }
         }
@@ -702,12 +708,46 @@ public class SettingsManager {
         }
         if (switchedFromVersionBefore("0.8.7b1")) {
             String currentValue = settings.getString("timeoutButtons");
-            if (!currentValue.toLowerCase().contains("/automod_approve")) {
+            if (!StringUtil.toLowerCase(currentValue).contains("/automod_approve")) {
                 settings.setString("timeoutButtons", currentValue + "\n\n"
                         + "@AutoMod\n"
                         + ".Approve=/Automod_approve\n"
                         + ".Deny=/Automod_deny");
             }
+        }
+        if (switchedFromVersionBefore("0.9.1b3")) {
+            /**
+             * Migrate both favorites and history, but only channels that don't
+             * have a value in the new setting yet.
+             * 
+             * This won't turn an already existing entry into a favorite even if
+             * it was a favorite before, however this usually shouldn't be an
+             * issue (except in some cases where 0.9.1b2 was used before, where
+             * not all favorites were migrated correctly).
+             */
+            LOGGER.info("Migrating Favorites/History");
+            List<String> favs = settings.getList("channelFavorites");
+            Map<String, Long> history = settings.getMap("channelHistory");
+            Map<String, List> data = settings.getMap("roomFavorites");
+            // Migrate history
+            for (String stream : history.keySet()) {
+                boolean isFavorite = favs.contains(stream);
+                long lastJoined = history.get(stream);
+                String channel = Helper.toChannel(stream);
+                if (!data.containsKey(channel)) {
+                    data.put(channel, new ChannelFavorites.Favorite(
+                            Room.createRegular(channel), lastJoined, isFavorite).toList());
+                }
+            }
+            // Migrate favorites
+            for (String fav : favs) {
+                String channel = Helper.toChannel(fav);
+                if (!data.containsKey(channel)) {
+                    data.put(channel, new ChannelFavorites.Favorite(
+                            Room.createRegular(channel), -1, true).toList());
+                }
+            }
+            settings.putMap("roomFavorites", data);
         }
         overrideHotkeySettings();
     }

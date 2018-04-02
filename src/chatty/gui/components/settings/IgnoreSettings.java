@@ -4,6 +4,7 @@ package chatty.gui.components.settings;
 import chatty.gui.GuiUtil;
 import chatty.gui.IgnoredMessages;
 import chatty.gui.components.LinkLabel;
+import chatty.util.StringUtil;
 import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -26,7 +27,7 @@ import static javax.swing.WindowConstants.HIDE_ON_CLOSE;
 public class IgnoreSettings extends SettingsPanel {
     
     private static final String INFO_IGNORE = HighlightSettings.INFO
-            +"Example: <code>chan:joshimuz re:!bet.*</code>";
+            +"Example: <code>chan:joshimuz start:!bet</code>";
     
     private final IgnoredUsers ignoredUsers;
     
@@ -104,23 +105,12 @@ public class IgnoreSettings extends SettingsPanel {
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weighty = 1;
         gbc.weightx = 1;
-        ListSelector items = d.addListSetting("ignore", 390, 160, true, true);
+        ListSelector items = d.addListSetting("ignore", "Ignore", 390, 160, true, true);
         items.setInfo(INFO_IGNORE);
-        items.setDataFormatter(new DataFormatter<String>() {
-
-            @Override
-            public String format(String input) {
-                return input.trim();
-            }
-        });
-        items.setTester(new Editor.Tester() {
-
-            @Override
-            public String test(Window parent, Component component, int x, int y, String value) {
-                HighlighterTester tester = new HighlighterTester(parent, value);
-                return tester.test();
-            }
-        });
+        HighlighterTester tester = new HighlighterTester(d, false);
+        tester.setLinkLabelListener(d.getLinkLabelListener());
+        items.setEditor(tester);
+        items.setDataFormatter(input -> input.trim());
         base.add(items, gbc);
         
         //-------
@@ -155,7 +145,7 @@ public class IgnoreSettings extends SettingsPanel {
 
             @Override
             public String format(String input) {
-                return input.replaceAll("\\s", "").toLowerCase();
+                return StringUtil.toLowerCase(input.replaceAll("\\s", ""));
             }
         };
         
@@ -178,7 +168,7 @@ public class IgnoreSettings extends SettingsPanel {
             gbc.fill = GridBagConstraints.BOTH;
             gbc.weightx = 0.5;
             gbc.weighty = 1;
-            ListSelector ignoredChat = d.addListSetting("ignoredUsers", 180, 250, false, true);
+            ListSelector ignoredChat = d.addListSetting("ignoredUsers", "Ignored User", 180, 250, false, true);
             ignoredChat.setDataFormatter(FORMATTER);
             add(ignoredChat, gbc);
             
@@ -186,7 +176,7 @@ public class IgnoreSettings extends SettingsPanel {
             gbc.fill = GridBagConstraints.BOTH;
             gbc.weightx = 0.5;
             gbc.weighty = 1;
-            ListSelector ignoredWhispers = d.addListSetting("ignoredUsersWhisper", 180, 250, false, true);
+            ListSelector ignoredWhispers = d.addListSetting("ignoredUsersWhisper", "Ignored User (Whisper)", 180, 250, false, true);
             ignoredWhispers.setDataFormatter(FORMATTER);
             add(ignoredWhispers, gbc);
             

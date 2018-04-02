@@ -38,9 +38,6 @@ public class Chatty {
     
     /**
      * The Twitch client id of this program.
-     * 
-     * If you compile this program yourself, you should create your own client
-     * id on http://www.twitch.tv/kraken/oauth2/clients/new
      */
     // use chatty's client id to workaround twitch token refresh issue
 //    public static final String CLIENT_ID = "vs66nrabff4c5cn8o9gln8wzu4o75g";
@@ -56,7 +53,7 @@ public class Chatty {
      * by points. May contain a single "b" for beta versions, which are counted
      * as older (so 0.8.7b4 is older than 0.8.7).
      */
-    public static final String VERSION = "0.9";
+    public static final String VERSION = "0.9.1";
     
     /**
      * Enable Version Checker (if you compile and distribute this yourself, you

@@ -32,7 +32,18 @@ public class Language {
      * @param language 
      */
     public synchronized static void setLanguage(String language) {
-        String[] split = language.split("-");
+        strings = getBundleForLanguage(language);
+        LOGGER.info(String.format("[Localization] Loaded locale '%s' for requested '%s'",
+                strings.getLocale(), language));
+    }
+    
+    public static ResourceBundle getBundleForLanguage(String language) {
+        Locale locale = parseLanguage(language);
+        return ResourceBundle.getBundle("chatty.lang.Strings", locale, CONTROL);
+    }
+    
+    public static Locale parseLanguage(String language) {
+        String[] split = language.split("_");
         Locale locale;
         if (language.trim().isEmpty()) {
             locale = Locale.getDefault();
@@ -43,11 +54,9 @@ public class Language {
         else {
             locale = new Locale(language);
         }
-        strings = ResourceBundle.getBundle("chatty.lang.Strings", locale, CONTROL);
-        LOGGER.info(String.format("[Localization] Loaded locale '%s' for requested '%s'",
-                strings.getLocale(), language));
+        return locale;
     }
-
+    
     /**
      * Gets the String with the given key for the current language. If the key
      * wasn't found a String consisting of a single questionmark is returned.
@@ -55,11 +64,31 @@ public class Language {
      * @param key The key as defined in the properties files
      * @return The language specific String, or "?" if none could be found
      */
-    public synchronized static String getString(String key) {
+    public static String getString(String key) {
+        return getString(key, true);
+    }
+
+    /**
+     * Gets the String with the given key for the current language. If the key
+     * wasn't found, either null or a String consisting of a single questionmark
+     * is returned, depending on the nonNull parameter.
+     *
+     * @param key The key as defined in the properties files
+     * @param nonNull If true, expect a non-null result ("?" is returned for
+     * missing keys)
+     * @return The language specific String, or null or "?" if none could be
+     * found
+     */
+    public synchronized static String getString(String key, boolean nonNull) {
         loadIfNecessary();
         if (!strings.containsKey(key)) {
-            LOGGER.warning("Missing string key: "+key);
-            return "?";
+            if (nonNull) {
+                // Only output warning if non-null is expected, since otherwise
+                // the program doesn't necessarily expect the key to exist
+                LOGGER.warning("Missing string key: "+key);
+                return "?";
+            }
+            return null;
         }
         return strings.getString(key);
     }
@@ -92,8 +121,11 @@ public class Language {
     
     /**
      * Control to load properties files using UTF-8 encoding.
+     * 
+     * Might be caching, but shouldn't matter as long as stuff is only loaded
+     * once on start.
      */
-    private static final ResourceBundle.Control CONTROL = new ResourceBundle.Control() {
+    public static final ResourceBundle.Control CONTROL = new ResourceBundle.Control() {
         
         @Override
         public List<String> getFormats(String name) {

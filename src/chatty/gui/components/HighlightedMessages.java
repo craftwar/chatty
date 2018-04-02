@@ -1,6 +1,7 @@
 
 package chatty.gui.components;
 
+import chatty.Room;
 import chatty.User;
 import chatty.gui.MainGui;
 import chatty.gui.components.textpane.UserMessage;
@@ -16,6 +17,7 @@ import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.text.MessageFormat;
 import java.util.Collection;
 import javax.swing.JDialog;
 import javax.swing.JScrollPane;
@@ -97,7 +99,7 @@ public class HighlightedMessages extends JDialog {
     private void messageAdded(String channel) {
         if (currentChannel == null || !currentChannel.equals(channel)
                 || currentChannelMessageCount > 12) {
-            messages.printLine(label+" in " + channel + ":");
+            messages.printLine(MessageFormat.format(label, channel));
             currentChannel = channel;
             currentChannelMessageCount = 0;
         }
@@ -204,6 +206,11 @@ public class HighlightedMessages extends JDialog {
         @Override
         public void usericonMenuItemClicked(ActionEvent e, Usericon usericon) {
             contextMenuListener.usericonMenuItemClicked(e, usericon);
+        }
+
+        @Override
+        public void roomsMenuItemClicked(ActionEvent e, Collection<Room> rooms) {
+            contextMenuListener.roomsMenuItemClicked(e, rooms);
         }
     }
     
