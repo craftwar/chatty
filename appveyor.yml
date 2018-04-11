@@ -2,17 +2,23 @@ version: '{build}'
 init:
 - ps: if ($env:rdp -eq "1") { iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1')) } #rdp debug
 environment:
-#  JAVA_HOME: C:\Program Files\Java\jdk1.8.0 # may not need set for safety, gradlew use java from path first
-  APPVEYOR_RDP_PASSWORD:
-    secure: K6XkhLVN7PZDnWWtrTKYneDPMS7FgBFYYe1xuU2s8js=
+# may not need set for safety, gradlew use java from path first
+  JAVA_HOME: C:\Program Files\Java\jdk9
+  PATH: '%JAVA_HOME%\bin;%PATH%'
+#  APPVEYOR_RDP_PASSWORD:
+#    secure: K6XkhLVN7PZDnWWtrTKYneDPMS7FgBFYYe1xuU2s8js=
 build_script:
-- gradlew release
+- choco install gradle
+- gradle release --no-daemon
+#- cmd
+#- gradlew wrapper --gradle-version 4.6
+#- gradlew release
 artifacts:
 - path: build\releases\*
 - path: build\libs\*
 cache:
-  - C:\Users\appveyor\.gradle
-  - .gradle
+  - C:\Users\appveyor\.gradle -> .appveyor.yml
+  - .gradle -> .appveyor.yml
   - build\classes
   - build\dependency-cache
   - build\libs
