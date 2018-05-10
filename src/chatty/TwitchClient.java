@@ -30,6 +30,7 @@ import chatty.util.ffz.FrankerFaceZListener;
 import chatty.util.ImageCache;
 import chatty.util.LogUtil;
 import chatty.util.MiscUtil;
+import chatty.util.OtherBadges;
 import chatty.util.ProcessManager;
 import chatty.util.RawMessageTest;
 import chatty.util.Speedruncom;
@@ -195,7 +196,7 @@ public class TwitchClient {
         // Create after Logging is created, since that resets some stuff
         ircLogger = new IrcLogger();
         
-        createTestUser("tduva", "#m_tt");
+        createTestUser("tduva", "");
         
         settings = new Settings(Chatty.getUserDataDirectory()+"settings");
         api = new TwitchApi(new TwitchApiResults(), new MyStreamInfoListener());
@@ -372,6 +373,10 @@ public class TwitchClient {
         
         // Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(new Shutdown(this)));
+        
+        if (Chatty.DEBUG) {
+            //textInput(Room.EMPTY, "/test3");
+        }
     }
     
 
@@ -1252,6 +1257,16 @@ public class TwitchClient {
                 parameter = "bits "+g.emoticons.getCheerEmotesString(Helper.toStream(channel));
             } else if (parameter.startsWith("bits ")) {
                 parameter = "bits "+parameter.substring("bits ".length());
+            } else if (parameter.startsWith("emoji ")) {
+                int num = Integer.parseInt(parameter.substring("emoji ".length()));
+                StringBuilder b = new StringBuilder();
+                for (Emoticon emote : g.emoticons.getEmoji()) {
+                    b.append(emote.code);
+                    if (--num == 0) {
+                        break;
+                    }
+                }
+                parameter = "message "+b.toString();
             }
             String raw = RawMessageTest.simulateIRC(channel, parameter, c.getUsername());
             if (raw != null) {
@@ -1650,6 +1665,7 @@ public class TwitchClient {
                 refreshRequests.add("badges");
                 api.getGlobalBadges(true);
                 api.getRoomBadges(Helper.toStream(channel), true);
+                OtherBadges.requestBadges(r -> usericonManager.setThirdPartyIcons(r), true);
             }
         } else if (parameter.equals("ffz")) {
             if (channel == null || channel.isEmpty()) {
