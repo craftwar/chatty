@@ -860,6 +860,13 @@ public class TwitchClient {
         else if (command.equals("changetoken")) {
             g.changeToken(parameter);
         }
+        else if (command.equals("loli")) {
+            if (c.onChannel(channel)) {
+                sendMessage(channel, "蘿莉交出來! " + (parameter  == null
+					? "" : parameter)
+				, true);
+            }
+        }
 
         //------------
         // System/Util
