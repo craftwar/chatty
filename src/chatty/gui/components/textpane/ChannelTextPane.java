@@ -1,6 +1,7 @@
 
 package chatty.gui.components.textpane;
 
+import chatty.Chatty;
 import chatty.gui.components.ChannelEditBox;
 import chatty.Helper;
 import chatty.SettingsManager;
@@ -12,9 +13,11 @@ import chatty.gui.StyleServer;
 import chatty.gui.UrlOpener;
 import chatty.gui.MainGui;
 import chatty.User;
+import chatty.gui.Highlighter.Match;
 import chatty.util.api.usericons.Usericon;
 import chatty.gui.components.menus.ContextMenuListener;
 import chatty.util.DateTime;
+import chatty.util.Debugging;
 import chatty.util.StringUtil;
 import chatty.util.TwitchEmotes.Emoteset;
 import chatty.util.api.CheerEmoticon;
@@ -30,6 +33,7 @@ import java.awt.event.AdjustmentEvent;
 import java.awt.event.AdjustmentListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
@@ -42,6 +46,7 @@ import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.Map.Entry;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -75,7 +80,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     
     private static final Logger LOGGER = Logger.getLogger(ChannelTextPane.class.getName());
     
-    private final StyledDocument doc;
+    private final DefaultStyledDocument doc;
+    
+    private static AtomicLong idCounter = new AtomicLong();
     
     private static final Color BACKGROUND_COLOR = new Color(250,250,250);
     
@@ -107,7 +114,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     public enum Attribute {
         IS_BAN_MESSAGE, BAN_MESSAGE_COUNT, TIMESTAMP, USER, IS_USER_MESSAGE,
         URL_DELETED, DELETED_LINE, EMOTICON, IS_APPENDED_INFO, INFO_TEXT, BANS,
-        BAN_MESSAGE, ID, ID_AUTOMOD, USERICON
+        BAN_MESSAGE, ID, ID_AUTOMOD, USERICON, IMAGE_ID, ANIMATED,
+        
+        HIGHLIGHT_WORD, HIGHLIGHT_LINE, EVEN, PARAGRAPH_SPACING,
+        
+        IS_REPLACEMENT, REPLACEMENT_FOR, REPLACED_WITH
     }
     
     public enum MessageType {
@@ -130,7 +141,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         EMOTICON_MAX_HEIGHT, EMOTICON_SCALE_FACTOR, BOT_BADGE_ENABLED,
         FILTER_COMBINING_CHARACTERS, PAUSE_ON_MOUSEMOVE,
         PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, EMOTICONS_SHOW_ANIMATED,
-        COLOR_CORRECTION,
+        COLOR_CORRECTION, SHOW_TOOLTIPS, BOTTOM_MARGIN,
         
         DISPLAY_NAMES_MODE
     }
@@ -143,6 +154,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     public final LineSelection lineSelection;
     
     private int messageTimeout = -1;
+    
+    private final MyEditorKit kit;
     
     private final javax.swing.Timer updateTimer;
     
@@ -163,12 +176,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         scrollManager = new ScrollManager();
         this.addMouseListener(scrollManager);
         this.addMouseMotionListener(scrollManager);
-        setEditorKit(new MyEditorKit(startAtBottom));
+        kit = new MyEditorKit(startAtBottom);
+        setEditorKit(kit);
         this.setDocument(new MyDocument());
-        doc = getStyledDocument();
+        doc = (DefaultStyledDocument)getStyledDocument();
         setEditable(false);
-        DefaultCaret caret = (DefaultCaret)getCaret();
+        DefaultCaret caret = new NoScrollCaret();
         caret.setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
+        setCaret(caret);
         styles.setStyles();
         
         if (special) {
@@ -198,6 +213,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
         scrollManager.cleanUp();
         linkController.cleanUp();
+        // Clearing the images returns false on imageUpdate() to stop animator
+        // threads
+        kit.clearImages();
     }
     
     public void setMessageTimeout(int seconds) {
@@ -218,9 +236,157 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * This seems pretty ineffecient, because it refreshes the whole document.
      */
     @Override
-    public void iconLoaded() {
-        ((MyDocument)doc).refresh();
+    public void iconLoaded(Image oldImage, Image newImage, boolean sizeChanged) {
+        kit.changeImage(oldImage, newImage);
+        boolean repainted = false;
+        if (!sizeChanged) {
+            repainted = repaintImage(newImage);
+        }
+        if (!repainted) {
+            ((MyDocument)doc).refresh();
+            if (Debugging.isEnabled("gifd", "gifd2")) {
+                Debugging.println("Refresh");
+            }
+        }
         scrollDownIfNecessary();
+    }
+    
+    /**
+     * Customized to handle Animated GIFs more efficiently. Anything else is
+     * handled as default.
+     * 
+     * This will achieve two main things: Only repaint a small area when a new
+     * frame is received (instead of the whole chat) and return false if the GIF
+     * is no longer present in the chat buffer (to stop further notifications).
+     * 
+     * For this purpose MyEditorKit stores the views that are created for
+     * Emotes, by Image. When chat messages are removed, the stored views are
+     * removed as well.
+     * 
+     * Note: Since the Emoticon class will first create a temporary image (the
+     * first time an Emote is added this session), the iconLoaded() method is
+     * called with the temporary and actual loaded image, so the references to
+     * the views can be updated. In order for the correct references to be found
+     * it is important that the temporary image is not reused across several
+     * different Emotes, since it acts as a key for lookup (this could probably
+     * be changed if reusing temporary images is added).
+     */
+    @Override
+    public boolean imageUpdate(Image img, int infoflags,
+                               int x, int y, int w, int h) {
+        if ((infoflags & FRAMEBITS) != 0 && !Debugging.isEnabled("gif1")) {
+            // Paint new frame of multi-frame image
+            boolean imageToRepaintStillPresent = repaintImage(img);
+            
+            if (Debugging.isEnabled("gifd")
+                    || (Debugging.isEnabled("gifd2") && !imageToRepaintStillPresent)) {
+                Debugging.println(String.format("FRAMEBITS (%s) %d,%d,%d,%d %d %s",
+                        img, x, y, w, h,
+                        Debugging.millisecondsElapsed("gifd"),
+                        imageToRepaintStillPresent));
+            }
+            return imageToRepaintStillPresent;
+        }
+        return super.imageUpdate(img, infoflags, x, y, w, h);
+    }
+    
+    /**
+     * Repaint the given image based on the views stored for it. If no views are
+     * present, then nothing is repainted and this returns false.
+     * 
+     * @param image The image to repaint, used to find the associated views
+     * @return true if any repainting was attempted, false otherwise
+     */
+    private boolean repaintImage(Image image) {
+        Collection<MyIconView> set = kit.getByImage(image);
+        boolean anyVisible = false;
+        if (set != null && !set.isEmpty()) {
+            Rectangle r = new Rectangle();
+            for (final MyIconView v : set) {
+                if (!Debugging.isEnabled("gift") && v.shouldCheckVisibility()) {
+                    SwingUtilities.invokeLater(() -> {
+                        checkViewVisibility(v);
+                    });
+                }
+                if (v.getShouldRepaint()) {
+                    v.getRectangle(r);
+                    repaint(r);
+                    anyVisible = true;
+                }
+            }
+        }
+        return anyVisible;
+    }
+    
+    /**
+     * Check if the given MyIconView has scrolled out of the visible area on the
+     * top. This is necessary because when the view moves out of screen it will
+     * not be painted anymore, so it won't receive it's coordinates anymore, and
+     * if old lines get removed from the top the coordinates shift, moving the
+     * view upwards, while it still has the old further down coordinates, so it
+     * would trigger a repaint request further downwards than it actually is.
+     * When the chat buffer is full (so that old lines do get removed) the
+     * visible area will sort of hover around the same coordinates (depending on
+     * line heights), so the the invisible view could actually trigger repaints
+     * in the visible area. Aside from causing repaints when it's not actually
+     * necessary, it might also cause other issues.
+     * 
+     * Methods like modelToView() depend on layout stuff, so this should be run
+     * in the EDT. In some cases modelToView() can actually be quite costly, but
+     * it might be fine in this case since it's not always called at a time
+     * where the layout is invalid (like scrolling down automatically), so it
+     * probably doesn't have to calculate too much stuff.
+     *
+     * @param v 
+     */
+    private void checkViewVisibility(MyIconView v) {
+        try {
+            Rectangle viewRect = modelToView(v.getStartOffset());
+            boolean northOfVisibleRect = viewRect != null
+                    && viewRect.y + v.getAdjustedHeight() < getVisibleRect().y;
+            
+            // Testing
+            if (Debugging.isEnabled("gifd4")) {
+                Debugging.println("Check "+(viewRect.y + v.getAdjustedHeight()) + " < " + getVisibleRect().y);
+                if (northOfVisibleRect) {
+                    Debugging.println("Stop "+v);
+                }
+            }
+            
+            if (northOfVisibleRect) {
+                v.setDontRepaint();
+                kit.debug();
+            }
+        } catch (BadLocationException ex) {
+            // Give up in case of error
+        }
+    }
+    
+    /**
+     * Remove text from chat, while also handling Emotes in the removed section
+     * correctly.
+     *
+     * @param start Start offset
+     * @param len Length of section to remove
+     * @throws BadLocationException 
+     */
+    private void remove(int start, int len) throws BadLocationException {
+        Debugging.edt();
+        int startLine = doc.getDefaultRootElement().getElementIndex(start);
+        int endLine = doc.getDefaultRootElement().getElementIndex(start+len);
+        Set<Long> before = Util.getImageIds(doc, startLine, endLine);
+        doc.remove(start, len);
+        if (!before.isEmpty()) {
+            Set<Long> after = Util.getImageIds(doc, startLine, endLine);
+            if (Debugging.isEnabled("gifd", "gifd2")) {
+                Debugging.println(String.format("Removed %d+%d (Before: %s After: %s)",
+                        start, len, before, after));
+            }
+            before.removeAll(after);
+            for (long id : before) {
+                kit.clearImage(id);
+            }
+        }
     }
     
     /**
@@ -231,8 +397,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     public void printMessage(Message message) {
         if (message instanceof UserMessage) {
             printUserMessage((UserMessage)message);
-        } else if (message instanceof SubscriberMessage) {
-            printSubscriberMessage((SubscriberMessage)message);
+        } else if (message instanceof UserNotice) {
+            printUsernotice((UserNotice)message);
         } else if (message instanceof AutoModMessage) {
             printAutoModMessage((AutoModMessage)message);
         }
@@ -244,7 +410,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * 
      * @param message 
      */
-    private void printSubscriberMessage(SubscriberMessage message) {
+    private void printUsernotice(UserNotice message) {
         closeCompactMode();
         print(getTimePrefix(), styles.info());
         
@@ -265,17 +431,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
         
         String text = message.text;
-        if (DateTime.isAprilFirst()) {
-            text = text.replace("months in a row", "years in a row");
-        }
-        print("[Notification] "+text+" ", style);
+        print("["+message.type+"] "+text+" ", style);
         if (!StringUtil.isNullOrEmpty(message.attachedMessage)) {
             print("[", styles.info());
             // Output with emotes, but don't turn URLs into clickable links
-            printSpecials(message.attachedMessage, message.user, styles.info(), message.emotes, true, false);
+            printSpecials(message.attachedMessage, message.user, styles.info(), message.emotes, true, false, null, null, null);
             print("]", styles.info());
         }
-        printNewline();
+        finishLine();
     }
     
     private void printAutoModMessage(AutoModMessage message) {
@@ -286,7 +449,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         style.addAttribute(Attribute.ID_AUTOMOD, message.id);
         print("[AutoMod] <"+message.user.getDisplayNick()+"> ", style);
         print(message.text, styles.info());
-        printNewline();
+        finishLine();
     }
 
     /**
@@ -340,8 +503,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         if (!highlighted && color == null && action && styles.actionColored()) {
             style = styles.standard(user.getDisplayColor());
         }
-        printSpecials(text, user, style, emotes, false, message.bits > 0);
-        printNewline();
+        printSpecials(text, user, style, emotes, false, message.bits > 0,
+                message.highlightMatches,
+                message.replaceMatches, message.replacement);
+        
+        if (message.highlighted) {
+            setLineHighlighted(doc.getLength());
+        }
+        finishLine();
     }
     
     private long getTimeAgo(Element element) {
@@ -563,7 +732,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 print(getTimePrefix(), styles.banMessage(user, message));
                 print(user.getCustomNick(), styles.nick(user, styles.info()));
                 print(" "+message, styles.info());
-                printNewline();
+                finishLine();
             }
         }
         
@@ -745,7 +914,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             try {
                 int removedStart = messageStartOffset + maxLength;
                 int removedLength = messageLength - maxLength;
-                doc.remove(removedStart, removedLength);
+                remove(removedStart, removedLength);
                 length = length - removedLength - 1;
                 doc.insertString(removedStart, "..", styles.info());
             } catch (BadLocationException ex) {
@@ -778,7 +947,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             int endOffset = messageOffsets[1];
             try {
                 // -1 to length to not delete newline character (I think :D)
-                doc.remove(startOffset, endOffset - startOffset - 1);
+                remove(startOffset, endOffset - startOffset - 1);
                 doc.insertString(startOffset, "<message deleted>", styles.info());
                 setLineDeleted(startOffset);
             } catch (BadLocationException ex) {
@@ -806,6 +975,16 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      */
     private void setLineDeleted(int offset) {
         doc.setParagraphAttributes(offset, 1, styles.deletedLine(), false);
+    }
+    
+    private void setVariableLineAttributes(int offset, boolean even, boolean updateTimestamp) {
+        doc.setParagraphAttributes(offset, 1, styles.variableLineAttributes(even, updateTimestamp), false);
+    }
+    
+    private void setLineHighlighted(int offset) {
+        SimpleAttributeSet attr = new SimpleAttributeSet();
+        attr.addAttribute(Attribute.HIGHLIGHT_LINE, true);
+        doc.setParagraphAttributes(offset, 1, attr, false);
     }
     
     private int[] getMessageOffsets(Element line) {
@@ -1464,35 +1643,13 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param user 
      */
     private void printUserIcons(User user) {
-        addAddonIcons(user, true);
-
-        addTwitchBadges(user);
-        if (user.isBot() && styles.botBadgeEnabled()) {
-            Usericon icon = user.getIcon(Usericon.Type.BOT);
-            if (icon != null && !icon.removeBadge) {
-                print(icon.getSymbol(), styles.makeIconStyle(icon));
-            }
-        }
-
-        addAddonIcons(user, false);
-    }
-    
-    private void addTwitchBadges(User user) {
-        java.util.List<Usericon> badges = user.getTwitchBadgeUsericons();
+        java.util.List<Usericon> badges = user.getBadges(styles.botBadgeEnabled());
         if (badges != null) {
             for (Usericon badge : badges) {
                 if (badge.image != null && !badge.removeBadge) {
                     print(badge.getSymbol(), styles.makeIconStyle(badge));
                 }
             }
-        }
-    }
-    
-    private void addAddonIcons(User user, boolean first) {
-        // Output addon usericons (if there are any)
-        java.util.List<Usericon> icons = user.getAddonIcons(first);
-        for (Usericon icon : icons) {
-            print(icon.getSymbol(), styles.makeIconStyle(icon));
         }
     }
     
@@ -1528,6 +1685,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
         Element firstToRemove = doc.getDefaultRootElement().getElement(0);
         Element lastToRemove = doc.getDefaultRootElement().getElement(amount - 1);
+        // TODO: change to fix for amount, maybe change to removing elements
+        clearImages(firstToRemove);
+        clearImages(lastToRemove);
         //System.out.println(firstToRemove+" "+lastToRemove);
         int startOffset = firstToRemove.getStartOffset();
         int endOffset = lastToRemove.getEndOffset();
@@ -1544,10 +1704,19 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     
     public void removeOldLines() {
         if (messageTimeout > 0) {
-            Element element = doc.getDefaultRootElement().getElement(0).getElement(0);
-            if (element != null && getTimeAgo(element) > messageTimeout * 1000) {
-                //System.out.println(getTimeAgo(element));
-                removeFirstLines(1);
+            Element paragraph = doc.getDefaultRootElement().getElement(0);
+            if (doc.getLength() > 1 && getTimeAgo(paragraph) > messageTimeout * 1000) {
+//                removeFirstLines(1);
+                
+                // Don't use doc.remove() for this, since removing one line with
+                // it seems to copy paragraph attributes to the follow line
+                // (visible if alternating backgrounds are showing)
+                if (doc.getDefaultRootElement().getElementCount() > 1) {
+                    // Can't use this if it's the last element
+                    doc.removeElement(doc.getDefaultRootElement().getElement(0));
+                } else {
+                    clearAll();
+                }
                 scrollDownIfNecessary();
                 resetNewlineRequired();
             }
@@ -1558,8 +1727,21 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         try {
             doc.remove(0, doc.getLength());
             resetNewlineRequired();
+            kit.clearImages();
         } catch (BadLocationException ex) {
             Logger.getLogger(ChannelTextPane.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+    private void clearImages(Element element) {
+        Long imageId = (Long)element.getAttributes().getAttribute(Attribute.IMAGE_ID);
+        if (imageId != null) {
+            kit.clearImage(imageId);
+        }
+        if (!element.isLeaf()) {
+            for (int i=0; i<element.getElementCount(); i++) {
+                clearImages(element.getElement(i));
+            }
         }
     }
     
@@ -1632,32 +1814,23 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      */
     protected void closeCompactMode() {
         if (compactMode != null) {
-            printNewline();
+            finishLine();
             compactMode = null;
         }
     }
-    
-    /*
-     * ########################
-     * # General purpose print
-     * ########################
-     */
-    
-//    private static Highlighter.HighlightPainter painter = new TestPainter();
     
     /**
      * Start the next print with a newline. This must be called when the current
      * line is finished.
      */
-    protected void printNewline() {
+    protected void finishLine() {
         newlineRequired = true;
         lineSelection.onLineAdded(getLastLine(doc));
-//        try {
-//            getHighlighter().addHighlight(doc.getLength(), doc.getLength(), painter);
-//        } catch (BadLocationException ex) {
-//            Logger.getLogger(ChannelTextPane.class.getName()).log(Level.SEVERE, null, ex);
-//        }
+        even = !even;
+        setVariableLineAttributes(doc.getLength() - 1, even, true);
     }
+    
+    boolean even = false;
     
    /**
      * Prints a regular-styled line (ended with a newline).
@@ -1676,7 +1849,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         // Close compact mode, because this is definately a new line (timestamp)
         closeCompactMode();
         print(getTimePrefix()+line,style);
-        printNewline();
+        finishLine();
     }
 
     /**
@@ -1693,13 +1866,18 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param style 
      * @param emotes 
      * @param ignoreLinks 
+     * @param containsBits 
      */
     protected void printSpecials(String text, User user, MutableAttributeSet style,
-            TagEmotes emotes, boolean ignoreLinks, boolean containsBits) {
+            TagEmotes emotes, boolean ignoreLinks, boolean containsBits,
+            java.util.List<Match> highlightMatches,
+            java.util.List<Match> replacements, String replacement) {
         // Where stuff was found
         TreeMap<Integer,Integer> ranges = new TreeMap<>();
         // The style of the stuff (basicially metadata)
         HashMap<Integer,MutableAttributeSet> rangesStyle = new HashMap<>();
+        
+        applyReplacements(text, replacements, replacement, ranges, rangesStyle);
         
         if (!ignoreLinks) {
             findLinks(text, ranges, rangesStyle);
@@ -1722,17 +1900,68 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             if (start > lastPrintedPos) {
                 // If there is anything between the special stuff, print that
                 // first as regular text
-                String processed = processText(user, text.substring(lastPrintedPos, start));
-                print(processed, style);
+//                String processed = processText(user, text.substring(lastPrintedPos, start));
+//                print(processed, style);
+                specialPrint(user, text, lastPrintedPos, start, style, highlightMatches);
             }
-            print(text.substring(start, end + 1),rangesStyle.get(start));
+            AttributeSet rangeStyle = rangesStyle.get(start);
+            String rangeText;
+            if (rangeStyle.containsAttribute(Attribute.IS_REPLACEMENT, true)) {
+                rangeText = (String)rangeStyle.getAttribute(Attribute.REPLACED_WITH);
+            } else {
+                rangeText = text.substring(start, end + 1);
+            }
+            print(rangeText, rangeStyle);
             lastPrintedPos = end + 1;
         }
         // If anything is left, print that as well as regular text
         if (lastPrintedPos < text.length()) {
-            print(processText(user, text.substring(lastPrintedPos)), style);
+//            print(processText(user, text.substring(lastPrintedPos)), style);
+            specialPrint(user, text, lastPrintedPos, text.length(), style, highlightMatches);
         }
         
+    }
+    
+    /**
+     * Prints the given range of text from start to end, adding the attribute
+     * for drawing Highlight/Ignore matches.
+     * 
+     * @param user
+     * @param text
+     * @param start
+     * @param end
+     * @param style
+     * @param highlightMatches 
+     */
+    private void specialPrint(User user, String text, int start, int end, MutableAttributeSet style, java.util.List<Match> highlightMatches) {
+        if (highlightMatches != null) {
+            for (Match m : highlightMatches) {
+                if (m.start < end && m.end > start) {
+                    // Affects this region at all
+                    int from = m.start;
+                    if (from < start) {
+                        from = start;
+                    }
+                    int to = m.end;
+                    if (to > end) {
+                        to = end;
+                    }
+                    if (from > start) {
+                        String processed = processText(user, text.substring(start, from));
+                        print(processed, style);
+                    }
+                    
+                    String processed = processText(user, text.substring(from, to));
+                    MutableAttributeSet styleCopy = new SimpleAttributeSet(style);
+                    styleCopy.addAttribute(Attribute.HIGHLIGHT_WORD, true);
+                    print(processed, styleCopy);
+                    start = to;
+                }
+            }
+        }
+        if (start < end) {
+            print(processText(user, text.substring(start, end)), style);
+        }
     }
     
     /**
@@ -1757,6 +1986,23 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         return result;
     }
     
+    private void applyReplacements(String text, java.util.List<Match> matches,
+            String replacement,
+            Map<Integer, Integer> ranges, Map<Integer, MutableAttributeSet> rangesStyle) {
+        if (matches != null) {
+            if (StringUtil.isNullOrEmpty(replacement)) {
+                replacement = "..";
+            }
+            for (Match m : matches) {
+                if (!inRanges(m.start, ranges) && !inRanges(m.end, ranges)) {
+                    ranges.put(m.start, m.end - 1);
+                    String replacedText = text.substring(m.start, m.end);
+                    rangesStyle.put(m.start, styles.replacement(replacedText, replacement));
+                }
+            }
+        }
+    }
+    
     private void findLinks(String text, Map<Integer, Integer> ranges,
             Map<Integer, MutableAttributeSet> rangesStyle) {
         // Find links
@@ -1764,7 +2010,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         while (urlMatcher.find()) {
             int start = urlMatcher.start();
             int end = urlMatcher.end() - 1;
-            if (!inRanges(start, ranges) && !inRanges(end,ranges)) {
+            if (!inRanges(start, ranges) && !inRanges(end, ranges)) {
                 String foundUrl = urlMatcher.group();
                 
                 // Check if URL contains ( ) like http://example.com/test(abc)
@@ -1884,7 +2130,6 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                         }
                         emoticon = b.build();
                         main.emoticons.addTempEmoticon(emoticon);
-                        LOGGER.info("Added emote from message: "+emoticon);
                     }
                     if (!main.emoticons.isEmoteIgnored(emoticon)) {
                         addEmoticon(emoticon, start, end, ranges, rangesStyle);
@@ -1917,7 +2162,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             if (main.emoticons.isEmoteIgnored(emoticon)) {
                 continue;
             }
-            if (emoticon.isAnimated
+            if (emoticon.isAnimated()
                     && !styles.isEnabled(Setting.EMOTICONS_SHOW_ANIMATED)) {
                 continue;
             }
@@ -2043,12 +2288,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param text
      * @param style 
      */
-    private void print(final String text,final MutableAttributeSet style) {
+    private void print(final String text, final AttributeSet style) {
         try {
             String newline = "";
-            if (doc.getLength() == 0 || newlineRequired) {
-                style.addAttribute(Attribute.TIMESTAMP, System.currentTimeMillis());
-            }
             if (newlineRequired) {
                 newline = "\n";
                 newlineRequired = false;
@@ -2068,10 +2310,18 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
 
     private void scrollDownIfNecessary() {
         if (lastSearchPos == null) {
-            if (scrollManager.isScrollPositionNearEnd()) {
+            if (scrollManager.isScrollPositionNearEnd()
+                    || scrollManager.scrolledUpTimeout()) {
+                /**
+                 * This should work fine, however using scrollDown() instead
+                 * might not, because it would try to scroll down before the
+                 * layout is finished (invokeLater would be necessary).
+                 *
+                 * Plus this should be better performance for lines that contain
+                 * many parts (causing many scroll down requests), for example
+                 * many Emotes.
+                 */
                 scrollManager.requestScrollDown();
-            } else if (scrollManager.scrolledUpTimeout()) {
-                scrollManager.scrollDown();
             }
         }
     }
@@ -2314,6 +2564,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
          * otherwise
          */
         private boolean scrolledUpTimeout() {
+            if (scrollDownRequest) {
+                return false;
+            }
             if (fixedChat || pauseKeyPressed) {
                 return false;
             }
@@ -2351,26 +2604,60 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         
         /**
          * Scrolls to the very end of the document.
+         * 
+         * This is using setValue() on the scrollbar because it doesn't seem to
+         * cause a layout (like modelToView() for getting the position for
+         * scrollRectToVisible() would), so it's faster. However most of the
+         * time requestScrollDown() would be used anyway (so it doesn't scroll
+         * down as often), so if setValue() turns out to not work perfectly
+         * further usage of scrollRectToVisible() may be viable as well.
+         * 
+         * There has been a rare instance of setValue(Integer.MAX_VALUE)
+         * scrolling up somehow instead of down, but maybe using getMaximum()
+         * works better.
          */
         private void scrollDown() {
             if (fixedChat) {
                 return;
             }
             scrollingDownInProgress = true;
-            scrollpane.getVerticalScrollBar().setValue(Integer.MAX_VALUE);
+            scrollDown1();
             scrollingDownInProgress = false;
         }
-
+        
+        private void scrollDown1() {
+            scrollpane.getVerticalScrollBar().setValue(scrollpane.getVerticalScrollBar().getMaximum());
+        }
+        
+        private void scrollDown2() {
+            scrollRectToVisible(new Rectangle(0,getPreferredSize().height,10,10));
+        }
+        
+        private void scrollDown3() {
+            try {
+                int endPosition = doc.getLength();
+                Rectangle bottom = modelToView(endPosition);
+                if (bottom != null) {
+                    bottom.height = bottom.height + 100;
+                    scrollRectToVisible(bottom);
+                }
+            } catch (BadLocationException ex) {
+                LOGGER.warning("Bad Location");
+            }
+        }
+        
         /**
          * Scrolls to the given offset in the document. Counts as manual
          * scrolling as far as requestScrollDown() is concerned.
-         * 
-         * @param offset 
+         *
+         * @param offset
          */
         private void scrollToOffset(int offset) {
             try {
                 Rectangle rect = modelToView(offset);
-                scrollRectToVisible(rect);
+                if (rect != null) {
+                    scrollRectToVisible(rect);
+                }
             } catch (BadLocationException ex) {
                 LOGGER.warning("Bad Location");
             }
@@ -2570,15 +2857,91 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 }
             }
             
+            // Load other stuff from the StyleServer
+            setSettings();
+
             // Additional styles
             SimpleAttributeSet nick = new SimpleAttributeSet(base());
             StyleConstants.setBold(nick, true);
             styles.put("nick", nick);
-            
+
+            //-----------------
+            // Paragraph Style
+            //-----------------
+//            Font font = new Font(StyleConstants.getFontFamily(standard()),
+//                    Font.PLAIN, StyleConstants.getFontSize(standard()));
+//            int fontHeight = new JFrame().getFontMetrics(font).getHeight();
+//            int fontHeight = font.getSize();
             MutableAttributeSet paragraph = styles.get("paragraph");
-            //StyleConstants.setLineSpacing(paragraph, 0.3f);
             paragraph.addAttribute(Attribute.DELETED_LINE, false);
+            /**
+             * Since the line spacing only gets added below the text, first add
+             * as much paragaph spacing above (if available), then distribute
+             * the rest above and below evenly. This should sort of center the
+             * text vertically in the paragraph, which is required for it to
+             * look good with paragraph seperating lines and backgounds.
+             */
+            int fontHeight = MyStyleConstants.getFontHeight(paragraph);
+            int preferredSpaceAbove = (int)Math.ceil(fontHeight * StyleConstants.getLineSpacing(paragraph));
+            int availableSpace = ((Long)paragraph.getAttribute(Attribute.PARAGRAPH_SPACING)).intValue();
+            int remainingSpace = Math.max(availableSpace - preferredSpaceAbove, 0);
+            int actualSpaceAbove = Math.min(preferredSpaceAbove, availableSpace);
+            int topSpacing = (int)(remainingSpace / 2 + actualSpaceAbove);
+            int bottomSpacing = (int)((remainingSpace / 2) + remainingSpace % 2);
+//            System.out.println(preferredSpaceAbove + " " + topSpacing + " " + bottomSpacing);
+            if (Debugging.isEnabled("oldspacings")) {
+                topSpacing = availableSpace / 3;
+                bottomSpacing = (availableSpace / 3) * 2 + availableSpace % 3;
+            }
+            StyleConstants.setSpaceAbove(paragraph, topSpacing);
+            StyleConstants.setSpaceBelow(paragraph, bottomSpacing);
             styles.put("paragraph", paragraph);
+            
+            //editorKit.setBottomMargin(Math.max((preferredSpaceAbove + availableSpace) / 4, 1));
+            int prevBottomMargin = getMargin().bottom;
+            int bottomMarginSetting = numericSettings.get(Setting.BOTTOM_MARGIN);
+            int bottomMargin = bottomMarginSetting;
+            if (bottomMarginSetting < 0) {
+                /**
+                 * Determine bottom margin automatically.
+                 * 
+                 * When there's nothing visually separating lines, then the
+                 * bottom line should (roughly) have as much space below as the
+                 * space to the previous line (so that the text seems vertically
+                 * centered), so add an additional bottom margin. When the lines
+                 * are separated, then only the paragraph's own spacing visually
+                 * belongs to it, so no additional margin is required.
+                 */
+                boolean alternatingBackgrounds = MyStyleConstants.getBackground2(paragraph) != null;
+                boolean separators = MyStyleConstants.getSeparatorColor(paragraph) != null;
+                int fullSpacing = preferredSpaceAbove + availableSpace;
+                if (!alternatingBackgrounds && !separators) {
+                    bottomMargin = (int)Math.max(fullSpacing / 2.5, 1);
+                } else if (!alternatingBackgrounds) {
+                    bottomMargin = 2;
+                } else {
+                    bottomMargin = 0;
+                }
+            }
+            if (Debugging.isEnabled("oldspacings")) {
+                bottomMargin = 3;
+            }
+            if (bottomMargin != prevBottomMargin) {
+                Chatty.println("Bottom Margin: "+bottomMargin);
+                setMargin(new Insets(3, 3, bottomMargin, 3));
+                repaint();
+            }
+            
+            //--------------
+            // Other Styles
+            //--------------
+            SimpleAttributeSet even = new SimpleAttributeSet();
+            even.addAttribute(Attribute.EVEN, true);
+            styles.put("even", even);
+            
+            SimpleAttributeSet odd = new SimpleAttributeSet();
+            odd.addAttribute(Attribute.EVEN, false);
+            styles.put("odd", odd);
             
             SimpleAttributeSet deleted = new SimpleAttributeSet();
             StyleConstants.setStrikeThrough(deleted, true);
@@ -2606,10 +2969,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             styles.put("clearSearchResult", clearSearchResult);
             
             setBackground(styleServer.getColor("background"));
-            
-            // Load other stuff from the StyleServer
-            setSettings();
-            
+
             return somethingChanged;
         }
         
@@ -2634,6 +2994,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addSetting(Setting.PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, false);
             addSetting(Setting.EMOTICONS_SHOW_ANIMATED, false);
             addSetting(Setting.COLOR_CORRECTION, true);
+            addSetting(Setting.SHOW_TOOLTIPS, true);
             addNumericSetting(Setting.FILTER_COMBINING_CHARACTERS, 1, 0, 2);
             addNumericSetting(Setting.DELETED_MESSAGES_MODE, 30, -1, 9999999);
             addNumericSetting(Setting.BUFFER_SIZE, 250, BUFFER_SIZE_MIN, BUFFER_SIZE_MAX);
@@ -2641,7 +3002,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addNumericSetting(Setting.EMOTICON_MAX_HEIGHT, 200, 0, 300);
             addNumericSetting(Setting.EMOTICON_SCALE_FACTOR, 100, 1, 200);
             addNumericSetting(Setting.DISPLAY_NAMES_MODE, 0, 0, 10);
+            addNumericSetting(Setting.BOTTOM_MARGIN, -1, -1, 100);
             timestampFormat = styleServer.getTimestampFormat();
+            linkController.setPopupEnabled(settings.get(Setting.SHOW_TOOLTIPS));
         }
         
         /**
@@ -2712,9 +3075,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             LOGGER.info("Update styles (only types "+changedStyles+")");
             Element root = doc.getDefaultRootElement();
             for (int i = 0; i < root.getElementCount(); i++) {
-                Element line = root.getElement(i);
-                for (int j = 0; j < line.getElementCount(); j++) {
-                    Element element = line.getElement(j);
+                Element paragraph = root.getElement(i);
+                if (changedStyles.contains("paragraph")) {
+                    doc.setParagraphAttributes(paragraph.getStartOffset(),
+                        1, paragraph(), false);
+                }
+                
+                for (int j = 0; j < paragraph.getElementCount(); j++) {
+                    Element element = paragraph.getElement(j);
                     String type = (String)element.getAttributes().getAttribute(TYPE);
                     int start = element.getStartOffset();
                     int end = element.getEndOffset();
@@ -2727,11 +3095,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                     // the previous one
                     // (seems to be faster than just setting all styles)
                     if (changedStyles.contains(type)) {
-                        if (type.equals("paragraph")) {
-                            //doc.setParagraphAttributes(start, length, rawStyles.get(type), false);
-                        } else {
-                            doc.setCharacterAttributes(start, length, style, false);
-                        }
+                        doc.setCharacterAttributes(start, length, style, false);
                     }
                 }
             }
@@ -2796,9 +3160,22 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
         
         public MutableAttributeSet paragraph() {
-            //System.out.println(styles.get("paragraph"));
-            //styles.get("paragraph").addAttribute(Attribute.TIMESTAMP, System.currentTimeMillis());
             return styles.get("paragraph");
+        }
+        
+        /**
+         * Currently whether the line is even and the timestamp of when the line
+         * was added (this method called).
+         * 
+         * @param even
+         * @return 
+         */
+        public MutableAttributeSet variableLineAttributes(boolean even, boolean updateTimestamp) {
+            MutableAttributeSet style = even ? styles.get("even") : styles.get("odd");
+            if (updateTimestamp) {
+                style.addAttribute(Attribute.TIMESTAMP, System.currentTimeMillis());
+            }
+            return style;
         }
         
         public MutableAttributeSet highlight(Color color) {
@@ -2952,6 +3329,15 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             return urlStyle;
         }
         
+        public MutableAttributeSet replacement(String text, String replacement) {
+            SimpleAttributeSet style = new SimpleAttributeSet(standard());
+            StyleConstants.setUnderline(style, true);
+            style.addAttribute(Attribute.IS_REPLACEMENT, true);
+            style.addAttribute(Attribute.REPLACEMENT_FOR, text);
+            style.addAttribute(Attribute.REPLACED_WITH, replacement);
+            return style;
+        }
+        
         /**
          * Make a style with the given icon.
          * 
@@ -2966,6 +3352,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             StyleConstants.setIcon(emoteStyle, emoteImage.getImageIcon());
             
             emoteStyle.addAttribute(Attribute.EMOTICON, emoteImage);
+            emoteStyle.addAttribute(Attribute.IMAGE_ID, idCounter.getAndIncrement());
+            emoteStyle.addAttribute(Attribute.ANIMATED, emoticon.isAnimated());
             Emoticons.addInfo(main.emoticons.getEmotesetInfo(), emoticon);
             return emoteStyle;
         }
@@ -2995,6 +3383,6 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
 }
 
 
- 
+
 
 

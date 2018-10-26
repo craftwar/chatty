@@ -9,6 +9,7 @@ import chatty.gui.components.LinkLabel;
 import chatty.gui.components.LinkLabelListener;
 import chatty.lang.Language;
 import chatty.util.Sound;
+import chatty.util.StringUtil;
 import chatty.util.api.usericons.Usericon;
 import chatty.util.settings.Setting;
 import chatty.util.settings.Settings;
@@ -98,6 +99,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
         MSGCOLORS("Message Colors", Language.getString("settings.page.msgColors")),
         HIGHLIGHT("Highlight", Language.getString("settings.page.highlight")),
         IGNORE("Ignore", Language.getString("settings.page.ignore")),
+        FILTER("Filter", Language.getString("settings.page.filter")),
         HISTORY("History", Language.getString("settings.page.history")),
         NOTIFICATIONS("Notifications", Language.getString("settings.page.notifications")),
         SOUNDS("Sounds", Language.getString("settings.page.sound")),
@@ -155,6 +157,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
             Page.NAMES,
             Page.HIGHLIGHT,
             Page.IGNORE,
+            Page.FILTER,
             Page.LOGGING,
         }));
         MENU.put(Page.WINDOW, Arrays.asList(new Page[]{
@@ -227,6 +230,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
         cards.add(new ColorSettings(this, settings), Page.CHATCOLORS.name);
         cards.add(new HighlightSettings(this), Page.HIGHLIGHT.name);
         cards.add(new IgnoreSettings(this), Page.IGNORE.name);
+        cards.add(new FilterSettings(this), Page.FILTER.name);
         msgColorSettings = new MsgColorSettings(this);
         cards.add(msgColorSettings, Page.MSGCOLORS.name);
         cards.add(new HistorySettings(this), Page.HISTORY.name);
@@ -592,13 +596,16 @@ public class SettingsDialog extends JDialog implements ActionListener {
      * @param name The setting name
      * @return 
      */
-    protected JCheckBox addSimpleBooleanSetting(String name) {
+    protected SimpleBooleanSetting addSimpleBooleanSetting(String name) {
         return addSimpleBooleanSetting(name,
                 Language.getString("settings.boolean."+name),
                 Language.getString("settings.boolean."+name+".tip", false));
     }
     
-    protected JCheckBox addSimpleBooleanSetting(String name, String description, String tooltipText) {
+    protected SimpleBooleanSetting addSimpleBooleanSetting(String name, String description, String tooltipText) {
+        if (tooltipText != null && !tooltipText.isEmpty()) {
+            tooltipText = "<html><body>"+StringUtil.addLinebreaks(tooltipText, 70, true);
+        }
         SimpleBooleanSetting result = new SimpleBooleanSetting(description, tooltipText);
         booleanSettings.put(name,result);
         return result;

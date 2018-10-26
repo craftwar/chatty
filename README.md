@@ -4,10 +4,10 @@ Chatty
 Chatty is a Twitch Chat Client for Desktop written in Java featuring many
 Twitch specific features.
 
-* Website: http://chatty.github.io
+* Website: https://chatty.github.io
 * E-Mail: chattyclient@gmail.com
 * Twitter: @ChattyClient (https://twitter.com/ChattyClient)
-* YouTube: http://www.youtube.com/user/chattyclient
+* YouTube: https://www.youtube.com/user/chattyclient
 * Discord: https://discord.gg/WTuqGeJ
 
 I learned about most of the Java techniques and APIs used in this during
@@ -18,7 +18,7 @@ didn't adhere to some license correctly, please tell me.
 Download
 ========
 
-Go to the [website](http://chatty.github.io) for ready to use downloads
+Go to the [website](https://chatty.github.io) for ready to use downloads
 and more information on the features.
 
 Contributions
@@ -42,7 +42,7 @@ License Information
 Chatty, as a whole, is released under the GPLv3 or later (see included
 `LICENSE` file).
 
-    Copyright (C) 2017  tduva and contributors
+    Copyright (C) 2017-2018  tduva and contributors
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -108,6 +108,13 @@ External Libraries
   * License: "CDDL 1.1" and "GPL 2 with CPE"
 	(see <https://tyrus.java.net/license.html>)
 
+* Txtmark
+  * Files under `assets/lib/`: `txtmark-0.13.jar`, `txtmark-txtmark-0.13.zip`
+  * Website: <https://github.com/rjeschke/txtmark>
+  * License: "Apache License 2.0"
+	(for the license text see the APACHE_LICENSE file
+	or <http://www.apache.org/licenses/LICENSE-2.0>).
+
 Images / Other
 --------------
 
@@ -130,7 +137,7 @@ Images / Other
 
 * Misc Icons from NUVOLA ICON THEME for KDE 3.x
 		by David Vignoni:
-  * Files (in various folders): `edit.png, ok.png, no.png`
+  * Files (in various folders): `edit.png, ok.png, no.png, colorpicker.png`
   * Source: <http://www.icon-king.com/projects/nuvola/>
   * License: LGPL
 	(for the license text see the LGPL file or

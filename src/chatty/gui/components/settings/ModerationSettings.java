@@ -1,6 +1,7 @@
 
 package chatty.gui.components.settings;
 
+import chatty.lang.Language;
 import java.awt.GridBagConstraints;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -12,6 +13,7 @@ import javax.swing.JPanel;
 public class ModerationSettings extends SettingsPanel {
     
     public ModerationSettings(final SettingsDialog d) {
+        
         JPanel blah = addTitledPanel("Messages (can only be received as a mod)", 0);
         
         blah.add(d.addSimpleBooleanSetting(
@@ -30,13 +32,16 @@ public class ModerationSettings extends SettingsPanel {
                 + "<code>Dialog: AutoMod Dialog</code> as action)."),
                 d.makeGbc(1, 6, 2, 1, GridBagConstraints.EAST));
         
-        JPanel bleh = addTitledPanel("Other Settings", 1);
         
-        bleh.add(d.addSimpleBooleanSetting(
-                "closeUserDialogOnAction",
-                "Close User Info Dialog when performing action (Button)",
-                "After clicking on a button, the User Info Dialog will automatically close."),
-                d.makeGbc(0, 0, 1, 1, GridBagConstraints.EAST));
+        JPanel userInfo = addTitledPanel(Language.getString("settings.section.userDialog"), 1);
+        
+        userInfo.add(d.addSimpleBooleanSetting(
+                "closeUserDialogOnAction"),
+                d.makeGbc(0, 0, 1, 1, GridBagConstraints.WEST));
+        
+        userInfo.add(d.addSimpleBooleanSetting(
+                "openUserDialogByMouse"),
+                d.makeGbc(0, 1, 1, 1, GridBagConstraints.WEST));
     }
     
 }

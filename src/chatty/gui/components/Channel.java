@@ -253,7 +253,10 @@ public class Channel extends JPanel {
         private final Set<String> commands = new TreeSet<>(Arrays.asList(new String[]{
             "subscribers", "subscribersOff", "timeout", "ban", "unban", "host", "unhost", "raid", "unraid", "clear", "mods",
             "part", "close", "reconnect", "slow", "slowOff", "r9k", "r9koff", "emoteonly", "emoteonlyoff",
-            "connection", "uptime", "dir", "wdir", "openDir", "openWdir", "releaseInfo", "openBackupDir",
+            "connection", "uptime", "appinfo", "releaseInfo",
+            "dir", "wdir", "openDir", "openWdir",
+            "showBackupDir", "openBackupDir", "showDebugDir", "openDebugDir",
+            "showTempDir", "openTempDir", "showJavaDir", "openJavaDir",
             "clearChat", "refresh", "changetoken", "testNotification", "server",
             "set", "add", "clearSetting", "remove", "customCompletion",
             "clearStreamChat", "getStreamChatSize", "setStreamChatSize", "streamChatTest", "openStreamChat",
@@ -563,16 +566,9 @@ public class Channel extends JPanel {
     public boolean requestFocusInWindow() {
         // Invoke later, because otherwise it wouldn't get focus for some
         // reason.
-        
-        // Commented out for testing
-//        SwingUtilities.invokeLater(new Runnable() {
-//
-//            @Override
-//            public void run() {
-//                //System.out.println("requesting focus for " + name);
-//                input.requestFocusInWindow();
-//            }
-//        });
+        SwingUtilities.invokeLater(() -> {
+            input.requestFocusInWindow();
+        });
         return input.requestFocusInWindow();
         
     }

@@ -33,12 +33,15 @@ public class Highlighter {
     private static final int LAST_HIGHLIGHTED_TIMEOUT = 10*1000;
     
     private final Map<String, Long> lastHighlighted = new HashMap<>();
+    private final Map<String, HighlightItem> lastHighlightedItem = new HashMap<>();
     private final List<HighlightItem> items = new ArrayList<>();
     private final List<HighlightItem> blacklistItems = new ArrayList<>();
     private HighlightItem usernameItem;
     private Color lastMatchColor;
     private boolean lastMatchNoNotification;
     private boolean lastMatchNoSound;
+    private List<Match> lastTextMatches;
+    private String lastReplacement;
     
     // Settings
     private boolean highlightUsername;
@@ -102,14 +105,8 @@ public class Highlighter {
         this.highlightNextMessages = highlight;
     }
     
-    public boolean check(User fromUser, String text) {
-        if (checkMatch(fromUser, text)) {
-            if (fromUser != null) {
-                addMatch(fromUser.getName());
-            }
-            return true;
-        }
-        return false;
+    public boolean check(User user, String text) {
+        return checkMatch(user, text);
     }
     
     /**
@@ -130,6 +127,14 @@ public class Highlighter {
         return lastMatchNoSound;
     }
     
+    public List<Match> getLastTextMatches() {
+        return lastTextMatches;
+    }
+    
+    public String getLastReplacement() {
+        return lastReplacement;
+    }
+    
     /**
      * Checks whether the given message consisting of username and text should
      * be highlighted.
@@ -142,35 +147,51 @@ public class Highlighter {
         
         Blacklist blacklist = new Blacklist(user, text, blacklistItems, false);
         
-        lastMatchColor = null;
-        lastMatchNoNotification = false;
-        lastMatchNoSound = false;
+        // Only reset matches, since the other variables are filled anyway,
+        // except for "follow-up", where they should stay the same
+        lastTextMatches = null;
         
         // Try to match own name first (if enabled)
         if (highlightUsername && usernameItem != null &&
                 usernameItem.matches(user, text, true, blacklist)) {
+            fillLastMatchVariables(usernameItem, text);
+            addMatch(user, usernameItem);
             return true;
         }
         
         // Then try to match against the items
         for (HighlightItem item : items) {
             if (item.matches(user, text, false, blacklist)) {
-                lastMatchColor = item.getColor();
-                lastMatchNoNotification = item.noNotification();
-                lastMatchNoSound = item.noSound();
+                fillLastMatchVariables(item, text);
+                addMatch(user, item);
                 return true;
             }
         }
         
-        // Then see if there is a recent match
+        // Then see if there is a recent match ("Highlight follow-up")
         if (highlightNextMessages && user != null && hasRecentMatch(user.getName())) {
+            fillLastMatchVariables(lastHighlightedItem.get(user.getName()), null);
             return true;
         }
         return false;
     }
     
-    private void addMatch(String fromUsername) {
-        lastHighlighted.put(fromUsername, System.currentTimeMillis());
+    private void fillLastMatchVariables(HighlightItem item, String text) {
+        lastMatchColor = item.getColor();
+        lastMatchNoNotification = item.noNotification();
+        lastMatchNoSound = item.noSound();
+        lastReplacement = item.getReplacement();
+        if (text != null) {
+            lastTextMatches = item.getTextMatches(text);
+        }
+    }
+    
+    private void addMatch(User user, HighlightItem item) {
+        if (highlightNextMessages && user != null) {
+            String username = user.getName();
+            lastHighlighted.put(username, System.currentTimeMillis());
+            lastHighlightedItem.put(username, item);
+        }
     }
     
     private boolean hasRecentMatch(String fromUsername) {
@@ -181,8 +202,10 @@ public class Highlighter {
     private void clearRecentMatches() {
         Iterator<Map.Entry<String, Long>> it = lastHighlighted.entrySet().iterator();
         while (it.hasNext()) {
-            if (System.currentTimeMillis() - it.next().getValue() > LAST_HIGHLIGHTED_TIMEOUT) {
+            Map.Entry<String, Long> entry = it.next();
+            if (System.currentTimeMillis() - entry.getValue() > LAST_HIGHLIGHTED_TIMEOUT) {
                 it.remove();
+                lastHighlightedItem.remove(entry.getKey());
             }
         }
     }
@@ -213,6 +236,8 @@ public class Highlighter {
         private boolean noNotification;
         private boolean noSound;
         private boolean appliesToInfo;
+        // Replacement string for filtering parts of a message
+        private String replacement;
         
         private String error;
         private String textWithoutPrefix = "";
@@ -295,6 +320,8 @@ public class Highlighter {
                     parseStatus(status, false);
                 } else if (item.startsWith("config:")) {
                     parseListPrefix(item, "config:");
+                } else if (item.startsWith("replacement:")) {
+                    replacement = parsePrefix(item, "replacement:");
                 } else {
                     textWithoutPrefix = item;
                     compilePattern("(?iu)" + Pattern.quote(item));
@@ -649,6 +676,10 @@ public class Highlighter {
             return error;
         }
         
+        public String getReplacement() {
+            return replacement;
+        }
+        
     }
     
     public static class Blacklist {
@@ -692,6 +723,11 @@ public class Highlighter {
 
         public boolean spans(int start, int end) {
             return this.start <= start && this.end >= end;
+        }
+        
+        @Override
+        public String toString() {
+            return start+"-"+end;
         }
 
     }

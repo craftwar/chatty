@@ -102,11 +102,11 @@ public class Emoticon {
     public final String stringId;
     public final String urlX2;
     public final String creator;
-    public final boolean isAnimated;
     
     private String stream;
     private Set<String> infos;
     private String emotesetInfo;
+    private boolean isAnimated;
     
     private volatile int width;
     private volatile int height;
@@ -252,7 +252,7 @@ public class Emoticon {
     }
     
     public static String getTwitchEmoteUrlById(int id, int factor) {
-        return "http://static-cdn.jtvnw.net/emoticons/v1/"+id+"/"+factor+".0";
+        return "https://static-cdn.jtvnw.net/emoticons/v1/"+id+"/"+factor+".0";
     }
     
     public String getBttvEmoteUrl(String id, int factor) {
@@ -434,6 +434,14 @@ public class Emoticon {
             return new TreeSet<>();
         }
         return new TreeSet<>(infos);
+    }
+    
+    public synchronized boolean isAnimated() {
+        return isAnimated;
+    }
+    
+    protected synchronized void setAnimated(boolean isAnimated) {
+        this.isAnimated = isAnimated;
     }
     
     public boolean hasGlobalEmoteset() {
@@ -682,7 +690,7 @@ public class Emoticon {
             if (type == Type.TWITCH || type == Type.BTTV || type == Type.FFZ || type == Type.EMOJI) {
                 if (scaledSize.width > defaultSize.width) {
                     urlFactor = 2;
-                    if (isAnimated && (float)scaledSize.width / defaultSize.width < 1.6) {
+                    if (isAnimated() && (float)scaledSize.width / defaultSize.width < 1.6) {
                         // For animated emotes, which currently are not resized,
                         // only load the 2x version if scale is high enough,
                         // otherwise it just looks ridiculous
@@ -785,7 +793,7 @@ public class Emoticon {
                 if (loadedIcon == null) {
                     image.setLoadingError();
                 } else {
-                    image.setImage(loadedIcon);
+                    image.setImageIcon(loadedIcon);
                 }
                 image.setLoadingDone();
             } catch (InterruptedException | ExecutionException ex) {
@@ -866,7 +874,7 @@ public class Emoticon {
 
     public static interface EmoticonUser {
 
-        void iconLoaded();
+        void iconLoaded(Image oldImage, Image newImage, boolean sizeChanged);
     }
     
     /**
@@ -914,6 +922,12 @@ public class Emoticon {
          */
         public ImageIcon getImageIcon() {
             if (icon == null) {
+                /**
+                 * Note: The temporary image (as well as the actual image) are
+                 * used as a key for GIF handling in ChannelTextPane, so it is
+                 * important not to reuse the same temporary image across
+                 * different emotes.
+                 */
                 icon = getDefaultIcon();
                 if (type != Type.NOT_FOUND_FAVORITE) {
                     loadImage();
@@ -965,13 +979,17 @@ public class Emoticon {
         }
         
         private void setLoadingError() {
-            icon.setImage(getDefaultImage(true));
+            setImageIcon(new ImageIcon(getDefaultImage(true)));
             loadingError = true;
         }
         
-        private void setImage(ImageIcon image) {
-            icon.setImage(image.getImage());
-            icon.setDescription(image.getDescription());
+        private void setImageIcon(ImageIcon newIcon) {
+            boolean sizeChanged = icon.getIconWidth() != newIcon.getIconWidth()
+                    || icon.getIconHeight() != newIcon.getIconHeight();
+            Image oldImage = icon.getImage();
+            icon.setImage(newIcon.getImage());
+            icon.setDescription(newIcon.getDescription());
+            informUsers(oldImage, newIcon.getImage(), sizeChanged);
         }
         
         private void setLoadedFrom(String url) {
@@ -984,7 +1002,6 @@ public class Emoticon {
          * Either error or successfully loaded.
          */
         private void setLoadingDone() {
-            informUsers();
             loading = false;
         }
         
@@ -996,9 +1013,9 @@ public class Emoticon {
             users.add(user);
         }
         
-        private void informUsers() {
+        private void informUsers(Image oldImage, Image newImage, boolean sizeChanged) {
             for (EmoticonUser user : users) {
-                user.iconLoaded();
+                user.iconLoaded(oldImage, newImage, sizeChanged);
             }
         }
         

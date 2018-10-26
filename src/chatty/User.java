@@ -134,13 +134,6 @@ public class User implements Comparable {
         return iconManager;
     }
     
-    public List<Usericon> getAddonIcons(boolean first) {
-        if (iconManager != null) {
-            return iconManager.getAddonIcons(this, first);
-        }
-        return new ArrayList<>();
-    }
-    
     public Usericon getIcon(Usericon.Type type) {
         if (iconManager != null) {
             return iconManager.getIcon(type, null, null, this);
@@ -178,14 +171,9 @@ public class User implements Comparable {
         return twitchBadges != null && twitchBadges.containsKey(id);
     }
     
-    /**
-     * Get list of Usericon objects for the Twitch Badges this user has.
-     * 
-     * @return List of Usericon objects in order, or null
-     */
-    public List<Usericon> getTwitchBadgeUsericons() {
-        if (iconManager != null && twitchBadges != null) {
-            return iconManager.getTwitchBadges(twitchBadges, this);
+    public List<Usericon> getBadges(boolean botBadgeEnabled) {
+        if (iconManager != null) {
+            return iconManager.getBadges(twitchBadges, this, botBadgeEnabled);
         }
         return null;
     }
@@ -299,6 +287,10 @@ public class User implements Comparable {
     
     public synchronized void addSub(String message, String text) {
         addLine(new SubMessage(System.currentTimeMillis(), message, text));
+    }
+    
+    public synchronized void addInfo(String message, String text) {
+        addLine(new InfoMessage(System.currentTimeMillis(), message, text));
     }
     
     public synchronized void addModAction(String commandAndParameters) {
@@ -868,6 +860,7 @@ public class User implements Comparable {
         public static final int SUB = 2;
         public static final int MOD_ACTION = 3;
         public static final int AUTO_MOD_MESSAGE = 4;
+        public static final int INFO = 5;
         
         private final Long time;
         private final int type;
@@ -929,6 +922,18 @@ public class User implements Comparable {
         
         public SubMessage(Long time, String message, String text) {
             super(SUB, time);
+            this.attached_message = message;
+            this.system_msg = text;
+        }
+    }
+    
+    public static class InfoMessage extends Message {
+        
+        public final String attached_message;
+        public final String system_msg;
+        
+        public InfoMessage(Long time, String message, String text) {
+            super(INFO, time);
             this.attached_message = message;
             this.system_msg = text;
         }

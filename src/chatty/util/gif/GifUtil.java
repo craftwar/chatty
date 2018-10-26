@@ -1,12 +1,19 @@
 
 package chatty.util.gif;
 
+import chatty.util.Debugging;
 import chatty.util.gif.GifDecoder.GifImage;
+import java.awt.Graphics;
+import java.awt.Image;
 import java.awt.MediaTracker;
+import java.awt.Toolkit;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.net.URLConnection;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -34,26 +41,45 @@ public class GifUtil {
      * @throws Exception When an error occured loading the image
      */
     public static ImageIcon getGifFromUrl(URL url) throws Exception {
-        try (InputStream input = url.openStream()) {
-            // Use readAllBytes() because GifDecoder doesn't handle streams well
-            byte[] imageData = readAllBytes(input);
-            ImageIcon image = null;
-            try {
-                //System.out.println(hash(imageData)+" "+url);
-                image = fixGifFps(imageData);
-            } catch (Exception ex) {
-                /**
-                 * If not a GIF, or another error occured, just create the image
-                 * normally.
-                 */
-                image = new ImageIcon(imageData);
+        ImageIcon image = null;
+        URLConnection c = url.openConnection();
+        try (InputStream input = c.getInputStream()) {
+            if (c.getContentLengthLong() <= 0) {
+                LOGGER.warning("Error saving " + url + " (empty): " + c.getHeaderField(null));
+            } else {
+                // Use readAllBytes() because GifDecoder doesn't handle streams well
+                byte[] imageData = readAllBytes(input);
+                
+                try {
+                    //System.out.println(hash(imageData)+" "+url);
+                    image = fixGifFps(imageData);
+                } catch (Exception ex) {
+                    /**
+                     * If not a GIF, or another error occured, just create the
+                     * image normally.
+                     */
+                    image = new ImageIcon(imageData);
+                    if (image.getIconWidth() == -1) {
+                        // new ImageIcon() breaks with some images (rare)
+                        // Checking for MediaTracker.ERRORED seems to sometimes
+                        // not work.
+                        LOGGER.info("Using ImageIO for "+url);
+                        Image loadedImage = ImageIO.read(new ByteArrayInputStream(imageData));
+                        if (loadedImage != null) {
+                            image.setImage(loadedImage);
+                            image.setDescription("ImageIO");
+                        }
+                    }
+                }
+
+                //System.out.println(url+" "+image.getImageLoadStatus()+" "+image.getIconHeight());
+                if (image.getImageLoadStatus() == MediaTracker.ERRORED
+                        || image.getIconWidth() == -1) {
+                    return null;
+                }
             }
-            
-            if (image.getImageLoadStatus() == MediaTracker.ERRORED) {
-                return null;
-            }
-            return image;
         }
+        return image;
     }
 
     /**

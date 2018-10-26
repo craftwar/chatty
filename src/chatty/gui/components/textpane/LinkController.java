@@ -13,6 +13,8 @@ import chatty.gui.components.menus.EmoteContextMenu;
 import chatty.gui.components.menus.UrlContextMenu;
 import chatty.gui.components.menus.UserContextMenu;
 import chatty.gui.components.menus.UsericonContextMenu;
+import chatty.util.Debugging;
+import chatty.util.StringUtil;
 import chatty.util.api.Emoticon;
 import chatty.util.api.Emoticon.EmoticonImage;
 import chatty.util.api.Emoticons;
@@ -24,8 +26,11 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JLabel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTextPane;
@@ -34,6 +39,7 @@ import javax.swing.Popup;
 import javax.swing.PopupFactory;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
@@ -201,12 +207,20 @@ public class LinkController extends MouseAdapter {
         hidePopupIfDifferentElement(element);
         
         JTextPane textPane = (JTextPane)e.getSource();
+        if (Debugging.isEnabled("attr")) {
+            popup.show(textPane, element, debugElement(element), -1);
+            return;
+        }
+        
         EmoticonImage emoteImage = getEmoticonImage(element);
         Usericon usericon = getUsericon(element);
+        String replacedText = getReplacedText(element);
         if (emoteImage != null) {
             popup.show(textPane, element, makeEmoticonPopupText(emoteImage), emoteImage.getImageIcon().getIconWidth());
         } else if (usericon != null) {
             popup.show(textPane, element, makeUsericonPopupText(usericon), usericon.image.getIconWidth());
+        } else if (replacedText != null) {
+            popup.show(textPane, element, makeReplacementPopupText(replacedText), 1);
         } else {
             popup.hide();
         }
@@ -258,6 +272,10 @@ public class LinkController extends MouseAdapter {
     
     private Usericon getUsericon(Element e) {
         return (Usericon)(e.getAttributes().getAttribute(ChannelTextPane.Attribute.USERICON));
+    }
+    
+    private String getReplacedText(Element e) {
+        return (String)(e.getAttributes().getAttribute(ChannelTextPane.Attribute.REPLACEMENT_FOR));
     }
     
     public static Element getElement(MouseEvent e) {
@@ -343,6 +361,8 @@ public class LinkController extends MouseAdapter {
         private final JLabel label = new JLabel();
         private final Timer showTimer;
 
+        private boolean enabled;
+        
         /**
          * Current popup. If not null, it means it is currently showing.
          */
@@ -367,7 +387,14 @@ public class LinkController extends MouseAdapter {
             showTimer.setRepeats(false);
         }
         
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+        
         public void show(JTextPane textPane, Element element, String text, int sourceWidth) {
+            if (!enabled) {
+                return;
+            }
             if (popup != null) {
                 return;
             }
@@ -394,8 +421,10 @@ public class LinkController extends MouseAdapter {
                 popup = null;
                 lastShown = System.currentTimeMillis();
             }
-            preparingToShow = false;
-            showTimer.stop();
+            if (preparingToShow) {
+                preparingToShow = false;
+                showTimer.stop();
+            }
         }
         
         public void update() {
@@ -430,6 +459,11 @@ public class LinkController extends MouseAdapter {
         
         private Point determinePosition() {
             try {
+                // Component has to be showing to determine it's location (and
+                // showing the popup only makes sense if it's showing anyway)
+                if (!textPane.isShowing()) {
+                    return null;
+                }
                 Dimension labelSize = label.getPreferredSize();
                 Rectangle r = textPane.modelToView(element.getStartOffset());
                 r.translate(0, - labelSize.height - 3);
@@ -478,6 +512,10 @@ public class LinkController extends MouseAdapter {
         popup.update();
     }
     
+    public void setPopupEnabled(boolean enabled) {
+        popup.setEnabled(enabled);
+    }
+    
     private static final String POPUP_HTML_PREFIX = "<html>"
             + "<body style='text-align:center;font-weight:bold;border:1px solid #000;padding:3px 5px 3px 5px;'>";
     
@@ -509,6 +547,9 @@ public class LinkController extends MouseAdapter {
                 }
             }
         }
+        if (Debugging.isEnabled("tt")) {
+            emoteInfo += " ["+emoticonImage.getImageIcon().getDescription()+"]";
+        }
         String code = emote.type == Emoticon.Type.EMOJI ? emote.stringId : Emoticons.toWriteable(emote.code);
         return String.format("%s%s<br /><span style='font-weight:normal'>%s</span>",
                 POPUP_HTML_PREFIX,
@@ -529,11 +570,45 @@ public class LinkController extends MouseAdapter {
         if (usericon.source == Usericon.SOURCE_CUSTOM) {
             info += " (Custom)";
         }
+        if (Debugging.isEnabled("tt")) {
+            info += " ["+usericon.image.getDescription()+"]";
+        }
         return info;
+    }
+    
+    private static String makeReplacementPopupText(String replacedText) {
+        return String.format("%sFiltered Text<div style='text-align:left;font-weight:normal'>%s</div>",
+                POPUP_HTML_PREFIX,
+                StringUtil.addLinebreaks(Helper.htmlspecialchars_encode(replacedText), 70, true));
     }
     
     public void cleanUp() {
         popup.cleanUp();
+    }
+    
+    private static String debugElement(Element e) {
+        StringBuilder result = new StringBuilder();
+        result.append("<html><body style='font-weight:normal;border:1px solid #000;padding:3px 5px 3px 5px;'>");
+        try {
+            result.append("'").append(e.getDocument().getText(e.getStartOffset(), e.getEndOffset() - e.getStartOffset())).append("'");
+            result.append("<br />");
+        } catch (BadLocationException ex) {
+            Logger.getLogger(LinkController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        AttributeSet attrs = e.getAttributes();
+        while (attrs != null) {
+            result.append("<b>").append(attrs.toString()).append("</b>");
+            result.append("<br />");
+            Enumeration en = attrs.getAttributeNames();
+            while (en.hasMoreElements()) {
+                Object key = en.nextElement();
+                Object value = attrs.getAttribute(key);
+                result.append(key).append(" => ").append(value);
+                result.append("<br />");
+            }
+            attrs = attrs.getResolveParent();
+        }
+        return result.toString();
     }
     
 }
