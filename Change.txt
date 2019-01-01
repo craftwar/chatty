@@ -3,3 +3,9 @@ Changes made by caftwar
 Don't show "Own message ignored
 disable /clear, use .clear instead to prevent misusage(kvirc use /clear to clear window)
 add SKLive pixiv tag [p][i] support
+
+patched files
+src/chatty/gui/MainGui.java
+src/chatty/gui/components/textpane/ChannelTextPane.java
+src/chatty/TwitchClient.java
+src/chatty/TwitchCommands.java

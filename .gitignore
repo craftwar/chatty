@@ -12,3 +12,6 @@ META-INF/
 build.xml
 bin/
 *.class
+.settings/org.eclipse.core.resources.prefs
+.project
+.classpath
