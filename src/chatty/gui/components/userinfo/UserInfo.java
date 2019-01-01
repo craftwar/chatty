@@ -80,17 +80,8 @@ public class UserInfo extends JDialog {
                 if (command == null) {
                     return;
                 }
-                User user = getUser();
-                String nick = user.getName();
-                String reason = getBanReason();
-                if (!reason.isEmpty()) {
-                    reason = " "+reason;
-                }
-                Parameters parameters = Parameters.create(nick+reason);
-                parameters.put("msg-id", getMsgId());
-                parameters.put("target-msg-id", getTargetMsgId());
-                parameters.put("automod-msg-id", getAutoModMsgId());
-                owner.anonCustomCommand(user.getRoom(), command, parameters);
+                
+                owner.anonCustomCommand(getUser().getRoom(), command, makeParameters());
                 owner.getActionListener().actionPerformed(e);
             }
         });
@@ -184,7 +175,7 @@ public class UserInfo extends JDialog {
             }
             
             private void showPopupMenu(MouseEvent e) {
-                JPopupMenu menu = new UserContextMenu(currentUser, currentAutoModMsgId, contextMenuListener);
+                JPopupMenu menu = new UserContextMenu(currentUser, currentMsgId, currentAutoModMsgId, contextMenuListener);
                 menu.show(e.getComponent(), e.getX(), e.getY());
             }
         });
@@ -209,6 +200,24 @@ public class UserInfo extends JDialog {
             return buttons.getCommand((JButton)object);
         }
         return null;
+    }
+    
+    private Parameters makeParameters() {
+        User user = getUser();
+        String nick = user.getName();
+        String reason = getBanReason();
+        if (!reason.isEmpty()) {
+            reason = " " + reason;
+        }
+        Parameters parameters = Parameters.create(nick + reason);
+        parameters.put("msg-id", getMsgId());
+        parameters.put("target-msg-id", getTargetMsgId());
+        parameters.put("automod-msg-id", getAutoModMsgId());
+        return parameters;
+    }
+    
+    private void updateButtons() {
+        buttons.updateButtonForParameters(makeParameters());
     }
     
     public void setFontSize(float size) {
@@ -271,6 +280,7 @@ public class UserInfo extends JDialog {
         infoPanel.update(user);
         singleMessage.setEnabled(currentMsgId != null);
         updateModButtons();
+        updateButtons();
         buttons.updateAutoModButtons(autoModMsgId);
         finishDialog();
     }
