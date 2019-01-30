@@ -6,6 +6,8 @@ import chatty.gui.GuiUtil;
 import chatty.gui.MainGui;
 import chatty.gui.components.menus.ContextMenuListener;
 import chatty.util.api.ChannelInfo;
+import chatty.util.api.Follower;
+import chatty.util.api.TwitchApi;
 import chatty.util.settings.Settings;
 import java.awt.Component;
 import java.awt.Point;
@@ -78,9 +80,15 @@ public class UserInfoManager {
         }
     }
 
-    public void setChannelInfo(ChannelInfo info) {
+    public void setChannelInfo(String stream, ChannelInfo info) {
         for (UserInfo dialog : dialogs) {
-            dialog.setChannelInfo(info);
+            dialog.setChannelInfo(stream, info);
+        }
+    }
+
+    public void setFollowInfo(String stream, String user, TwitchApi.RequestResultCode result, Follower follow) {
+        for (UserInfo dialog : dialogs) {
+            dialog.setFollowInfo(stream, user, follow, result);
         }
     }
     
@@ -129,10 +137,16 @@ public class UserInfoManager {
     }
     
     private UserInfo getBestByUser(User user) {
+        // First try to find existing one for user, if enabled
+        if (settings.getBoolean("reuseUserDialog")) {
+            for (UserInfo dialog : dialogs) {
+                if (dialog.getUser() == user && dialog.isVisible()) {
+                    return dialog;
+                }
+            }
+        }
+        // Then try to find visible and unpinned one
         for (UserInfo dialog : dialogs) {
-//            if (dialog.getUser() == user && dialog.isVisible()) {
-//                return dialog;
-//            }
             if (!dialog.isPinned() && dialog.isVisible()) {
                 return dialog;
             }

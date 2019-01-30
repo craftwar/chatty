@@ -284,6 +284,7 @@ public class SettingsManager {
         
         settings.addBoolean("closeUserDialogOnAction", true);
         settings.addBoolean("openUserDialogByMouse", true);
+        settings.addBoolean("reuseUserDialog", false);
 
         // History / Favorites
         settings.addMap("channelHistory",new TreeMap(), Setting.LONG);
@@ -303,11 +304,9 @@ public class SettingsManager {
 
         // Game Presets
         settings.addList("gamesFavorites",new ArrayList(), Setting.STRING);
-        //settings.setFile("gamesFavorites", historyFile);
         
-        // Community Presets
-        settings.addMap("communityFavorites", new HashMap(), Setting.STRING);
-        //settings.setFile("communityFavorites", historyFile);
+        // Tags Presets
+        settings.addMap("tagsFavorites", new HashMap(), Setting.STRING);
 
         // Stream Status Presets
         settings.addList("statusPresets", new ArrayList(), Setting.LIST);
@@ -575,6 +574,7 @@ public class SettingsManager {
         settings.addString("livestreamerCommand", "livestreamer");
         settings.addBoolean("livestreamerUseAuth", false);
         settings.addBoolean("livestreamerShowDialog", true);
+        settings.addBoolean("livestreamerAutoCloseDialog", true);
 
         // Stream Highlights
         settings.addString("streamHighlightCommand", "!highlight");

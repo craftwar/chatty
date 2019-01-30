@@ -3,6 +3,7 @@ package chatty.gui;
 
 import chatty.Helper;
 import chatty.gui.components.textpane.ChannelTextPane;
+import chatty.util.Debugging;
 import chatty.util.MiscUtil;
 import chatty.util.ProcessManager;
 import chatty.util.commands.CustomCommand;
@@ -11,6 +12,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
@@ -180,10 +182,12 @@ public class GuiUtil {
     private static final int MOUSE_LOCATION_HGAP = 60;
     
     public static void setLocationToMouse(Component c) {
+        // Check might still be useful, even if this config is not used
         if (c.getGraphicsConfiguration() == null) {
             return;
         }
-        Rectangle screen = c.getGraphicsConfiguration().getBounds();
+        // Use screen the mouse is on
+        Rectangle screen = getEffectiveScreenBounds(MouseInfo.getPointerInfo().getDevice().getDefaultConfiguration());
         Point mouseLocation = MouseInfo.getPointerInfo().getLocation();
         int width = c.getWidth();
         int height = c.getHeight();
@@ -211,20 +215,37 @@ public class GuiUtil {
         c.setLocation(mouseLocation);
     }
     
-    private static final int SHAKE_INTENSITY = 2;
+    public static Rectangle getEffectiveScreenBounds(GraphicsConfiguration config) {
+        Rectangle bounds = config.getBounds();
+        Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(config);
+        Debugging.println("screenbounds", "%s %s", bounds, insets);
+        bounds.x += insets.left;
+        bounds.y += insets.top;
+        bounds.width -= insets.right;
+        bounds.height -= insets.bottom;
+        return bounds;
+    }
     
-    public static void shake(Window window) {
+    /**
+     * Moves the window very quickly to create a shaking effect, ending on the
+     * original location. Uses Thread.sleep() so length should not be too high.
+     *
+     * @param window The window to shake
+     * @param intensity The distance the window will move
+     * @param length The number of iterations of the shaking effect
+     */
+    public static void shake(Window window, int intensity, int length) {
         Point original = window.getLocation();
-        for (int i=0;i<2;i++) {
+        for (int i=0;i<length;i++) {
             try {
                 // Using Thread.sleep() is not ideal because it freezes the GUI,
                 // but it's really short
                 Thread.sleep(50);
-                window.setLocation(original.x+SHAKE_INTENSITY, original.y);
+                window.setLocation(original.x+intensity, original.y);
                 Thread.sleep(10);
-                window.setLocation(original.x, original.y-SHAKE_INTENSITY);
+                window.setLocation(original.x, original.y-intensity);
                 Thread.sleep(10);
-                window.setLocation(original.x-SHAKE_INTENSITY, original.y+SHAKE_INTENSITY);
+                window.setLocation(original.x-intensity, original.y+intensity);
                 Thread.sleep(10);
                 window.setLocation(original);
             } catch (InterruptedException ex) {
@@ -240,7 +261,7 @@ public class GuiUtil {
             dialog.setLocationRelativeTo(null);
             dialog.setVisible(true);
             JButton button = new JButton("Shake");
-            button.addActionListener(e -> shake(dialog));
+            button.addActionListener(e -> shake(dialog, 2, 2));
             dialog.add(button);
             dialog.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         });

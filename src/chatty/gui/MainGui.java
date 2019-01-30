@@ -17,11 +17,8 @@ import chatty.gui.components.TokenGetDialog;
 import chatty.gui.components.FavoritesDialog;
 import chatty.gui.components.JoinDialog;
 import chatty.util.*;
-import chatty.util.api.Emoticon;
-import chatty.util.api.StreamInfo;
-import chatty.util.api.TokenInfo;
-import chatty.util.api.Emoticons;
-import chatty.util.api.ChannelInfo;
+import chatty.util.api.*;
+
 import java.util.List;
 import chatty.Chatty;
 import chatty.TwitchClient;
@@ -71,13 +68,8 @@ import chatty.gui.notifications.NotificationManager;
 import chatty.gui.notifications.NotificationWindowManager;
 import chatty.lang.Language;
 import chatty.util.TwitchEmotes.EmotesetInfo;
-import chatty.util.api.ChatInfo;
-import chatty.util.api.CheerEmoticon;
 import chatty.util.api.Emoticon.EmoticonImage;
-import chatty.util.api.EmoticonUpdate;
 import chatty.util.api.Emoticons.TagEmotes;
-import chatty.util.api.FollowerInfo;
-import chatty.util.api.RoomsInfo;
 import chatty.util.api.TwitchApi.RequestResultCode;
 import chatty.util.api.pubsub.ModeratorActionData;
 import chatty.util.commands.CustomCommand;
@@ -1741,14 +1733,8 @@ public class MainGui extends JFrame implements Runnable {
         public void streamInfosMenuItemClicked(ActionEvent e, Collection<StreamInfo> streamInfos) {
             String cmd = e.getActionCommand();
             String sorting = null;
-            if (cmd.equals("sortName")) {
-                sorting = "name";
-            } else if (cmd.equals("sortGame")) {
-                sorting = "game";
-            } else if (cmd.equals("sortRecent")) {
-                sorting = "recent";
-            } else if (cmd.equals("sortViewers")) {
-                sorting = "viewers";
+            if (cmd.startsWith("sort_")) {
+                sorting = cmd.substring("sort_".length());
             }
             if (sorting != null) {
                 client.settings.setString("liveStreamsSorting", sorting);
@@ -2865,12 +2851,11 @@ public class MainGui extends JFrame implements Runnable {
         });
     }
     
-    public void printSubscriberMessage(final User user,
-            final String text, final String message, final int months,
-            final String emotes) {
+    public void printSubscriberMessage(final User user, final String text,
+            final String message, final String emotes) {
         SwingUtilities.invokeLater(() -> {
             Emoticons.TagEmotes tagEmotes = Emoticons.parseEmotesTag(emotes);
-            SubscriberMessage m = new SubscriberMessage(user, text, message, months, tagEmotes);
+            SubscriberMessage m = new SubscriberMessage(user, text, message, tagEmotes);
 
             boolean printed = printUsernotice(m);
             if (printed) {
@@ -3270,8 +3255,10 @@ public class MainGui extends JFrame implements Runnable {
                         && data.type != ModeratorActionData.Type.UNMODDED) {
                     boolean showActions = client.settings.getBoolean("showModActions");
                     boolean showActionsRestrict = client.settings.getBoolean("showModActionsRestrict");
-                    boolean showMessage = showActions && !ownAction
-                            && !(showActionsRestrict && ModLogInfo.isBanOrInfoAssociated(data));
+                    boolean showMessage =
+                               showActions
+                            && (!ownAction || ModLogInfo.isIndirectAction(data))
+                            && !(showActionsRestrict && ModLogInfo.isAssociated(data));
                     boolean showActionby = client.settings.getBoolean("showActionBy");
                     for (Channel chan : chans) {
                         // Create for each channel, just in case (since they get
@@ -4038,15 +4025,15 @@ public class MainGui extends JFrame implements Runnable {
             }
         });
     }
-    
-    public void setChannelInfo(final String channel, final ChannelInfo info, final RequestResultCode result) {
-        SwingUtilities.invokeLater(new Runnable() {
 
-            @Override
-            public void run() {
-                adminDialog.setChannelInfo(channel, info, result);
-                userInfoDialog.setChannelInfo(info);
-            }
+    public void setFollowInfo(final String stream, final String user, RequestResultCode result, Follower follower) {
+        SwingUtilities.invokeLater(() -> userInfoDialog.setFollowInfo(stream, user, result, follower));
+    }
+
+    public void setChannelInfo(final String stream, final ChannelInfo info, final RequestResultCode result) {
+        SwingUtilities.invokeLater(() -> {
+            adminDialog.setChannelInfo(stream, info, result);
+            userInfoDialog.setChannelInfo(stream, info);
         });
     }
     
@@ -4061,7 +4048,11 @@ public class MainGui extends JFrame implements Runnable {
     public ChannelInfo getCachedChannelInfo(String channel, String id) {
         return client.api.getCachedChannelInfo(channel, id);
     }
-    
+
+    public Follower getSingleFollower(String stream, String streamId, String user, String userId, boolean refresh) {
+        return client.api.getSingeFollower(stream, streamId, user, userId, refresh);
+    }
+
     public void getChatInfo(String stream) {
         client.api.getChatInfo(stream);
     }
@@ -4093,8 +4084,8 @@ public class MainGui extends JFrame implements Runnable {
         client.settings.putList("gamesFavorites", new ArrayList(favorites));
     }
     
-    public void setCommunityFavorites(Map<String, String> favorites) {
-        client.settings.putMap("communityFavorites", favorites);
+    public void setStreamTagFavorites(Map<String, String> favorites) {
+        client.settings.putMap("tagsFavorites", favorites);
     }
     
     /**
@@ -4106,8 +4097,8 @@ public class MainGui extends JFrame implements Runnable {
         return new HashSet<>(client.settings.getList("gamesFavorites"));
     }
     
-    public Map<String, String> getCommunityFavorites() {
-        return client.settings.getMap("communityFavorites");
+    public Map<String, String> getStreamTagFavorites() {
+        return client.settings.getMap("tagsFavorites");
     }
     
     public void putChannelInfoResult(final RequestResultCode result) {

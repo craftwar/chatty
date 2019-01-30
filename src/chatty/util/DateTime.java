@@ -78,6 +78,20 @@ public class DateTime {
         }
         return ago(time, 0, 1, 0, options);
     }
+    
+    public static String formatAccountAgeCompact(long time) {
+        if (System.currentTimeMillis() - time >= YEAR*1000) {
+            return ago(time, 0, 1, 0, Formatting.LAST_ONE_EXACT, Formatting.VERBOSE);
+        }
+        return ago(time, 0, 1, 0, Formatting.VERBOSE);
+    }
+    
+    public static String formatAccountAgeVerbose(long time) {
+        if (System.currentTimeMillis() - time > DAY*1000) {
+            return ago(time, 0, 2, DateTime.H, Formatting.VERBOSE);
+        }
+        return ago(time, 0, 1, 0, Formatting.VERBOSE);
+    }
 
     public static String agoText(long time) {
         long seconds = (System.currentTimeMillis() - time) / 1000;
@@ -237,7 +251,7 @@ public class DateTime {
             boolean lastOne = shown >= max && max > 0
                     || left-1 <= lowerLimit && shown > 0;
             String timeName = timeNames[i+timeNames.length-times.length];
-            if (time == 1 && verbose) {
+            if (time == 1 && verbose && !(lastOne && lastOneExact)) {
                 timeName = timeName.substring(0, timeName.length() - 1);
             }
             if (lastOne && lastOneExact) {
@@ -326,6 +340,10 @@ public class DateTime {
 //        }
         System.out.println(TimeUnit.HOURS.toMillis(1));
         
-        System.out.println(formatAccountAge(System.currentTimeMillis() - 2500*1000));
+        System.out.println(formatAccountAgeCompact(System.currentTimeMillis() - 2500*1000));
+        System.out.println(formatAccountAgeCompact(System.currentTimeMillis() - DAY*3*1000));
+        System.out.println(formatAccountAgeCompact(System.currentTimeMillis() - YEAR*1*1000));
+        System.out.println(formatAccountAgeCompact(System.currentTimeMillis() - 12500*1000));
+        System.out.println(formatAccountAgeVerbose(System.currentTimeMillis() - 300*DAY*1000));
     }
 }

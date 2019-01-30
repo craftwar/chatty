@@ -2,6 +2,12 @@
 package chatty.util;
 
 import chatty.Chatty;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,6 +30,7 @@ public class Debugging {
     private static final Map<String, String> timedOutput = new HashMap<>();
     private static final Map<String, Long> timedOutputTimes = new HashMap<>();
     private static final Timer timer;
+    private static final Map<String, Long> counter = new HashMap<>();
     
     static {
         timer = new Timer("Debugging", true);
@@ -124,6 +131,15 @@ public class Debugging {
         return System.currentTimeMillis() - previous;
     }
     
+    public synchronized static long count(String key) {
+        long value = 0;
+        if (counter.containsKey(key)) {
+            value = counter.get(key) + 1;
+        }
+        counter.put(key, value);
+        return value;
+    }
+    
     public interface OutputListener {
         
         public void debug(String line);
@@ -138,6 +154,14 @@ public class Debugging {
      */
     public static String filterToken(String input) {
         return input.replaceAll("(-set:token|-token|-password) \\w+", "$1 <token>");
+    }
+    
+    public static void writeToFile(String output) {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get("E:\\abcdtest"), Charset.forName("UTF-8"))) {
+            writer.append(output);
+        } catch (IOException ex) {
+            System.out.println(ex);
+        }
     }
     
     // For testing

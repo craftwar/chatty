@@ -2,6 +2,7 @@
 package chatty;
 
 import chatty.util.StringUtil;
+import java.util.regex.Matcher;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -103,4 +104,89 @@ public class HelperTest {
         assertEquals(Helper.tagsvalue_decode(" "), " ");
         assertEquals(Helper.tagsvalue_decode("\\\\s\\s\\:"), "\\s ;");
     }
+    
+    @Test
+    public void testUrls() {
+        
+        //---------------
+        // Just matching
+        //---------------
+        String[] shouldMatch = new String[]{
+            "twitch.tv",
+            "Twitch.TV",
+            "twitch.tv/abc",
+            "twitch.tv/ABC",
+            "http://twitch.tv",
+            "https://twitch.tv",
+            "amazon.de/ääh",
+            "https://google.de",
+            "google.com/abc(blah)",
+            "http://börse.de",
+            "www.twitch.tv/",
+            "twitch.tv🐁"
+        };
+        
+        /**
+         * Trying to match the full string, so it's not necessary to check the
+         * matches. Ofc it would find an URL in most of those.
+         */
+        String[] shouldNotMatch = new String[]{
+            "twitch.tv.",
+            "twitch.tv ",
+            " twitch.tv",
+            " twitch.tv ",
+            "https:/twitch.tv",
+            "https://twitch.tv:",
+            "twitch.tv:",
+            "twitch.tv,",
+            "www.twitch.tv,",
+            "www.twitch.tv/,",
+            "asdas.abc",
+            "http://",
+            "http://www.",
+            "https://",
+            "https://www."
+        };
+        
+        for (String test : shouldMatch) {
+            assertTrue("Should match: "+test, Helper.getUrlPattern().matcher(test).matches());
+        }
+        
+        for (String test : shouldNotMatch) {
+            assertFalse("Should not match: "+test, Helper.getUrlPattern().matcher(test).matches());
+        }
+        
+        //-------------------
+        // Finding in String
+        //-------------------
+        String find = "Abc http://example.com http://example.com/abc(test) dumdidum(http://example.com) [http://example.com] "
+                + "(http://example.com)[github.io] [github.io] (github.io) 🐣twitch.tv🐣 https:// www. not.a/domain "
+                + "twitch.tv/🐁 twitch.tv github.io $ chatty.github.io Other text and whatnot https://chatty.github.io";
+        String[] findTarget = new String[]{
+            "http://example.com",
+            "http://example.com/abc(test)",
+            "http://example.com)",
+            "http://example.com]",
+            "http://example.com)[github.io]",
+            "github.io]",
+            "github.io)",
+            "twitch.tv🐣",
+            "twitch.tv/🐁",
+            "twitch.tv",
+            "github.io",
+            "chatty.github.io",
+            "https://chatty.github.io"
+        };
+
+        Matcher m = Helper.getUrlPattern().matcher(find);
+        int i = 0;
+        while (m.find()) {
+            String found = m.group();
+            String target = findTarget[i];
+            assertTrue("Should have found: "+target+" found: "+found,
+                    found.equals(target));
+            i++;
+        }
+    }
+    
 }
