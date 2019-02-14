@@ -81,7 +81,7 @@ public class Emoticon {
      * Number of seconds emote images are supposed to be cached for before they
      * are refreshed.
      */
-    private static final int CACHE_TIME = 60*60*24*7;
+    private static final int CACHE_TIME = 60*60*24*14;
     
     // Assumed width/height if there is none given
     private static final int DEFAULT_WIDTH = 28;
@@ -528,6 +528,12 @@ public class Emoticon {
     
     private static final int IMAGE_EXPIRE_MINUTES = 4*60;
     
+    /**
+     * Set unused EmoticonImage objects to be garbage collected. Should only be
+     * called from the EDT.
+     * 
+     * @return 
+     */
     public int clearOldImages() {
         if (images != null) {
             Set<EmoticonImage> toRemove = new HashSet<>();

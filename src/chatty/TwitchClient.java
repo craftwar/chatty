@@ -1973,7 +1973,7 @@ public class TwitchClient {
         }
         synchronized(cachedDebugMessages) {
             if (g == null) {
-                cachedDebugMessages.add(line);
+                cachedDebugMessages.add("["+DateTime.currentTimeExact()+"] "+line);
             } else {
                 if (!cachedDebugMessages.isEmpty()) {
                     g.printDebug("[Start of cached messages]");
@@ -2004,7 +2004,7 @@ public class TwitchClient {
     }
     
     /**
-     * Output a warning.
+     * Output a warning to the user, instead of the debug window.
      * 
      * @param line 
      */
