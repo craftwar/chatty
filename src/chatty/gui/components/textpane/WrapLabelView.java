@@ -79,9 +79,13 @@ public class WrapLabelView extends LabelView {
             }
         }
         
+        boolean isHoveredUser = ChannelTextPane.hoveredUser != null &&
+                (getAttributes().containsAttribute(Attribute.USER, ChannelTextPane.hoveredUser)
+                || getAttributes().containsAttribute(Attribute.MENTION, ChannelTextPane.hoveredUser));
+        
         boolean highlightMatchesEnabled = MyStyleConstants.getHighlightMatchesEnabled(getAttributes());
-        if (highlightMatchesEnabled
-                && getAttributes().containsAttribute(Attribute.HIGHLIGHT_WORD, true)) {
+        boolean isHl = highlightMatchesEnabled && getAttributes().containsAttribute(Attribute.HIGHLIGHT_WORD, true);
+        if (isHl || isHoveredUser) {
             Color c = StyleConstants.getForeground(getAttributes());
             Color c2;
             Color c3;
@@ -91,18 +95,18 @@ public class WrapLabelView extends LabelView {
                 c2 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 200);
                 c3 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 60);
             } else {
-                c2 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 100);
-                c3 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 160);
+                c3 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 100);
+                c2 = new Color(c.getRed(), c.getGreen(), c.getBlue(), 160);
             }
             
-            g.setColor(c2);
+            g.setColor(isHoveredUser ? c3 : c2);
             
             // Bottom
             g.drawLine(r.x+1, r.y+r.height, r.x+r.width, r.y+r.height);
             // Right
             g.drawLine(r.x+r.width, r.y+1, r.x+r.width, r.y+r.height-1);
 
-            g.setColor(c3);
+            g.setColor(isHoveredUser ? c2 : c3);
             
             // Top
             g.drawLine(r.x+1, r.y, r.x+r.width, r.y);
@@ -112,7 +116,16 @@ public class WrapLabelView extends LabelView {
             // Move text a bit to the right (there should probably be a better
             // way of doing this, this is a bit of a hack, not sure if it breaks
             // anything
-            r.translate(2, 0);
+            if (isHl) {
+                r.translate(2, 0);
+            }
+        } else {
+            // Mostly used for namecolor background
+            Color bgColor = MyStyleConstants.getLabelBackground(getAttributes());
+            if (bgColor != null) {
+                g.setColor(bgColor);
+                g.fillRect(r.x, r.y, r.width, r.height);
+            }
         }
         if (Debugging.isEnabled("labeloutlines")) {
             g.setColor(Color.red);

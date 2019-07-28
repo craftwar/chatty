@@ -142,7 +142,7 @@ public class MainMenu extends JMenuBar {
         //----------
         // Channels
         //----------
-        addItem(channels, "favoritesDialog", Language.getString("menubar.dialog.favorites"), KeyEvent.VK_F);
+        addItem(channels, "dialog.favorites");
         addItem(channels, "dialog.streams");
         addItem(channels, "dialog.addressbook");
         channels.addSeparator();
@@ -177,7 +177,8 @@ public class MainMenu extends JMenuBar {
         extra.add(streamChat);
         
         JMenu streamHighlights = new JMenu("Stream Highlights");
-        addItem(streamHighlights, "addStreamHighlight", "Add Stream Highlight");
+        streamHighlights.setMnemonic(KeyEvent.VK_H);
+        addItem(streamHighlights, "stream.addhighlight", "Add Stream Highlight");
         addItem(streamHighlights, "openStreamHighlights", "Open Stream Highlights");
         extra.add(streamHighlights);
         

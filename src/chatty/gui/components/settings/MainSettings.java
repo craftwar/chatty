@@ -49,7 +49,7 @@ public class MainSettings extends SettingsPanel {
         
         gbc = d.makeGbc(1, 2, 1, 1, GridBagConstraints.WEST);
         JTextField channels = d.addSimpleStringSetting("autojoinChannel", 25, true);
-        GuiUtil.installLengthLimitDocumentFilter(channels, 5000, false);
+        GuiUtil.installLengthLimitDocumentFilter(channels, 8000, false);
         startSettingsPanel.add(channels, gbc);
         
         onStart.addActionListener(e -> {
@@ -71,7 +71,7 @@ public class MainSettings extends SettingsPanel {
                 +Language.getString("settings.language.info")
                 + "<br /><br />"
                 + "If you would like to help with translations, check "
-                + "[url:http://chatty.github.io/localization.html the website].",
+                + "[url:https://chatty.github.io/localization.html the website].",
                 d.getLinkLabelListener()),
                 d.makeGbc(0, 1, 2, 1));
     }

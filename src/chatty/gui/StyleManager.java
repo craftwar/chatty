@@ -5,6 +5,7 @@ import chatty.util.colors.HtmlColors;
 import chatty.gui.components.textpane.ChannelTextPane.Attribute;
 import chatty.gui.components.textpane.ChannelTextPane.Setting;
 import chatty.gui.components.textpane.MyStyleConstants;
+import chatty.util.MiscUtil;
 import chatty.util.colors.ColorCorrectionNew;
 import chatty.util.colors.ColorCorrector;
 import chatty.util.settings.Settings;
@@ -50,6 +51,8 @@ public class StyleManager implements StyleServer {
             "banDurationMessage", "banReasonMessage", "displayNamesMode",
             "paragraphSpacing", "bufferSizes", "userlistFont",
             "showImageTooltips", "highlightMatches", "nickColorCorrection",
+            "mentions", "mentionsInfo", "markHoveredUser", "highlightMatchesAll",
+            "nickColorBackground",
             "inputHistoryMultirowRequireCtrl" // Not delievered through this
             ));
     
@@ -158,11 +161,16 @@ public class StyleManager implements StyleServer {
         addBooleanSetting(Setting.BAN_REASON_MESSAGE, "banReasonMessage");
         addBooleanSetting(Setting.BOT_BADGE_ENABLED, "botBadgeEnabled");
         addBooleanSetting(Setting.SHOW_TOOLTIPS, "showImageTooltips");
+        addBooleanSetting(Setting.HIGHLIGHT_MATCHES_ALL, "highlightMatchesAll");
+        addLongSetting(Setting.HIGHLIGHT_HOVERED_USER, "markHoveredUser");
         addLongSetting(Setting.FILTER_COMBINING_CHARACTERS, "filterCombiningCharacters");
         addBooleanSetting(Setting.PAUSE_ON_MOUSEMOVE, "pauseChatOnMouseMove");
         addBooleanSetting(Setting.PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, "pauseChatOnMouseMoveCtrlRequired");
         addBooleanSetting(Setting.EMOTICONS_SHOW_ANIMATED, "showAnimatedEmotes");
+        addLongSetting(Setting.USERCOLOR_BACKGROUND, "nickColorBackground");
         addLongSetting(Setting.BOTTOM_MARGIN, "bottomMargin");
+        addLongSetting(Setting.MENTIONS, "mentions");
+        addLongSetting(Setting.MENTIONS_INFO, "mentionsInfo");
         // Deleted Messages Settings
         String deletedMessagesMode = settings.getString("deletedMessagesMode");
         long deletedMessagesModeNumeric = 0;

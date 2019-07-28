@@ -1354,6 +1354,18 @@
         <dd>Any Chat Message (including highlighted ones, in this case
             the order of list entries can matter).</dd>
         
+        <dt>Info Message</dt>
+        <dd>Most messages that are not regular Chat Messages, by default shown
+            in blue color (e.g. joining a channel, channel state change, command
+            responses, sub notifications, and more).</dd>
+        <dd>A few of these messages are output in all open channels at once
+            (e.g. "Disconnected" message), which would trigger a notification
+            for each channel.</dd>
+        <dd>This will trigger at the same time as some other event types, e.g.
+            Subscriber Notification, so make sure you're not using both of them
+            at the same time, or using text or channel matching to restrict it
+            accordingly.</dd>
+        
         <dt>Whisper</dt>
         <dd>Any Whisper message (including highlighted ones).</dd>
 
@@ -1589,8 +1601,16 @@
         <a name="Commands">Commands</a>
         <a href="#top" class="top">[back to menu]</a>
     </h2>
+    <p>This settings page allows you to do the following, which is explained in
+        more detail on another page:</p>
     
-    <div class="moreInfo">This help is on a separate page: <a href="help-custom_commands.html">Custom Commands &amp; Context Menus</a></div>
+    <ul>
+        <li><a href="help-custom_commands.html#custom-commands">Add Custom Commands</a>, which
+            are basicially aliases for anything you could also enter directly
+            into the inputbox.</li>
+        <li><a href="help-custom_commands.html#menus">Customize the User Dialog and various Context Menus</a>
+            using Custom Commands and similiar syntax.</li>
+    </ul>
     
     
     <h2>
@@ -1676,41 +1696,10 @@
     <ul>
         <li>Prefixing <code>@</code> always completes usernames</li>
         <li>Prefixing <code>/</code> always completes command names</li>
-        <li>Prefixing <code>:</code> always completes Emoji codes (not Twitch Emotes!)</li>
+        <li>Prefixing <code>:</code> always completes Emoji codes, and by default also Twitch Emotes</li>
         <li>Prefixing <code>.</code> always performs Custom Completion</li>
         <li>Certain commands such as <code>/ban</code> always complete usernames</li>
     </ul>
-    
-    <h3>Localized Names</h3>
-    <dl class="dl-settings">
-        <dt>Prefer Regular name for username-based commmands</dt>
-        <dd>If you complete a username after a command like <code>/ban</code>
-            which needs a regular username as parameter, then always prefer the
-            regular name.</dd>
-        
-        <dt>Include all name types in result</dt>
-        <dd>If a user has a Localized name, or you have a
-            <a href="help.html#customNames">Custom name</a> set, then not only
-            the name that matched, but also the other types of names are added
-            to the result.</dd>
-        <dd><em>Example:</em> If a user is called <code>test</code> and has the
-            Localized Name <code>名前</code>, then entering
-            <code>tes</code> and <kbd>TAB</kbd> will show in the results both
-            <code>test (名前)</code> and
-            <code>名前 (test)</code>, so you can select either name by cycling
-            through the results via <kbd>TAB</kbd> as usual.</dd>
-        <dd>
-            <dl class="dl-settings-sub">
-                <dt>Only when no more than two matches</dt>
-                <dd>Only include all name types when no more than two names
-                    match, so that you don't have to cycle through all the
-                    different name types when you have a larger list.</dd>
-                <dd><em>Tip:</em> Once you found the right name, you can move the cursor
-                    to leave completion, and then press <kbd>TAB</kbd> again to
-                    complete the name again to get the other name types again.</dd>
-            </dl>
-        </dd>
-    </dl>
         
     <h3>Apperance / Behaviour</h3>
     <dl class="dl-settings">
@@ -1757,6 +1746,37 @@
         
         
     </dl>
+    
+    <h3>Localized Names</h3>
+    <dl class="dl-settings">
+        <dt>Prefer Regular name for username-based commmands</dt>
+        <dd>If you complete a username after a command like <code>/ban</code>
+            which needs a regular username as parameter, then always prefer the
+            regular name.</dd>
+        
+        <dt>Include all name types in result</dt>
+        <dd>If a user has a Localized name, or you have a
+            <a href="help.html#customNames">Custom name</a> set, then not only
+            the name that matched, but also the other types of names are added
+            to the result.</dd>
+        <dd><em>Example:</em> If a user is called <code>test</code> and has the
+            Localized Name <code>名前</code>, then entering
+            <code>tes</code> and <kbd>TAB</kbd> will show in the results both
+            <code>test (名前)</code> and
+            <code>名前 (test)</code>, so you can select either name by cycling
+            through the results via <kbd>TAB</kbd> as usual.</dd>
+        <dd>
+            <dl class="dl-settings-sub">
+                <dt>Only when no more than two matches</dt>
+                <dd>Only include all name types when no more than two names
+                    match, so that you don't have to cycle through all the
+                    different name types when you have a larger list.</dd>
+                <dd><em>Tip:</em> Once you found the right name, you can move the cursor
+                    to leave completion, and then press <kbd>TAB</kbd> again to
+                    complete the name again to get the other name types again.</dd>
+            </dl>
+        </dd>
+    </dl>
 
     <h3><a name="TAB_Completion-custom">Custom Completion Items</a><a name="Completion-custom"></a></h3>
     
@@ -1768,7 +1788,7 @@
         case no prefix is required.</p>
 
     <p><em>Example:</em> Add <code>chatty</code> as <em>Key</em> and
-        <code>http://chatty.github.io</code> as <em>Value</em> and then in the
+        <code>https://chatty.github.io</code> as <em>Value</em> and then in the
         inputbox type <code>.chatty</code> (notice the dot in front) and press
         <kbd>TAB</kbd> to complete it to the URL.</p>
                 

@@ -14,10 +14,14 @@ import chatty.gui.UrlOpener;
 import chatty.gui.MainGui;
 import chatty.User;
 import chatty.gui.Highlighter.Match;
+import chatty.gui.components.Channel;
 import chatty.util.api.usericons.Usericon;
 import chatty.gui.components.menus.ContextMenuListener;
+import chatty.gui.emoji.EmojiUtil;
 import chatty.util.DateTime;
 import chatty.util.Debugging;
+import chatty.util.MiscUtil;
+import chatty.util.RingBuffer;
 import chatty.util.StringUtil;
 import chatty.util.TwitchEmotes.Emoteset;
 import chatty.util.api.CheerEmoticon;
@@ -27,6 +31,7 @@ import chatty.util.api.Emoticon.EmoticonUser;
 import chatty.util.api.Emoticons;
 import chatty.util.api.Emoticons.TagEmotes;
 import chatty.util.api.pubsub.ModeratorActionData;
+import chatty.util.colors.ColorCorrectionNew;
 import chatty.util.colors.ColorCorrector;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -51,6 +56,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.*;
 import static javax.swing.JComponent.WHEN_FOCUSED;
 import javax.swing.border.Border;
@@ -108,15 +114,20 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     private static final Matcher urlMatcher = Helper.getUrlPattern().matcher("");
     
     public MainGui main;
+    private Channel channel;
 
     protected LinkController linkController = new LinkController();
     private static StyleServer styleServer;
+    
+    private final RingBuffer<MentionCheck> lastUsers = new RingBuffer<>(300);
+    
+    protected static User hoveredUser;
     
     public enum Attribute {
         IS_BAN_MESSAGE, BAN_MESSAGE_COUNT, TIMESTAMP, USER, IS_USER_MESSAGE,
         URL_DELETED, DELETED_LINE, EMOTICON, IS_APPENDED_INFO, INFO_TEXT, BANS,
         BAN_MESSAGE, ID, ID_AUTOMOD, AUTOMOD_ACTION, USERICON, IMAGE_ID, ANIMATED,
-        APPENDED_INFO_UPDATED,
+        APPENDED_INFO_UPDATED, MENTION,
         
         HIGHLIGHT_WORD, HIGHLIGHT_LINE, EVEN, PARAGRAPH_SPACING,
         CUSTOM_BACKGROUND,
@@ -145,9 +156,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         EMOTICON_MAX_HEIGHT, EMOTICON_SCALE_FACTOR, BOT_BADGE_ENABLED,
         FILTER_COMBINING_CHARACTERS, PAUSE_ON_MOUSEMOVE,
         PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, EMOTICONS_SHOW_ANIMATED,
-        COLOR_CORRECTION, SHOW_TOOLTIPS, BOTTOM_MARGIN,
+        SHOW_TOOLTIPS, BOTTOM_MARGIN,
         
-        DISPLAY_NAMES_MODE
+        DISPLAY_NAMES_MODE,
+        MENTIONS, MENTIONS_INFO,
+        HIGHLIGHT_HOVERED_USER, HIGHLIGHT_MATCHES_ALL, USERCOLOR_BACKGROUND
     }
     
     private static final long DELETED_MESSAGES_KEEP = 0;
@@ -176,6 +189,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         this.addMouseMotionListener(linkController);
         linkController.addUserListener(main.getUserListener());
         linkController.addUserListener(lineSelection);
+        linkController.setUserHoverListener(user -> setHoveredUser(user));
         linkController.setLinkListener(this);
         scrollManager = new ScrollManager();
         this.addMouseListener(scrollManager);
@@ -231,6 +245,24 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     
     public void setMouseClickedListener(MouseClickedListener listener) {
         linkController.setMouseClickedListener(listener);
+    }
+    
+    public void setChannel(Channel channel) {
+        this.channel = channel;
+        linkController.setChannel(channel);
+    }
+    
+    private void setHoveredUser(User user) {
+        int mode = styles.getInt(Setting.HIGHLIGHT_HOVERED_USER);
+        if (mode == SettingConstants.USER_HOVER_HL_OFF) {
+            if (hoveredUser != null) {
+                hoveredUser = null;
+                repaint();
+            }
+        } else if (user != hoveredUser) {
+            hoveredUser = user;
+            repaint();
+        }
     }
     
     /**
@@ -430,9 +462,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
         
         String text = message.infoText;
-        print("["+message.type+"] "+text+" ", userStyle);
+        print("["+message.type+"] "+text, userStyle);
         if (!StringUtil.isNullOrEmpty(message.attachedMessage)) {
-            print("[", style);
+            print(" [", style);
             // Output with emotes, but don't turn URLs into clickable links
             printSpecialsNormal(message.attachedMessage, message.user, style, message.emotes, true, false, null, null, null);
             print("]", style);
@@ -444,10 +476,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         closeCompactMode();
         print(getTimePrefix(), style);
         
-        MutableAttributeSet specialStyle = styles.user(message.user, style);
-        specialStyle.addAttribute(Attribute.ID_AUTOMOD, message.msgId);
-        print("[AutoMod] <"+message.user.getDisplayNick()+"> ", specialStyle);
-        print(message.message, style);
+        MutableAttributeSet userStyle = styles.user(message.user, style);
+        userStyle.addAttribute(Attribute.ID_AUTOMOD, message.msgId);
+        // Should be the same as the start of the "text" in the AutoModMessage,
+        // so highlight matches are displayed properly
+        String startText = "[AutoMod] <"+message.user.getDisplayNick()+">";
+        print(startText, userStyle);
+        printSpecialsInfo(" "+message.message, style,
+                Match.shiftMatchList(message.highlightMatches, -startText.length()));
         finishLine();
     }
 
@@ -487,6 +523,13 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             highlighted = true;
         }
         
+        Color background = null;
+        if (message.backgroundColor != null) {
+            background = message.backgroundColor;
+        } else if (message.highlighted) {
+            background = MyStyleConstants.getHighlightBackground(styles.paragraph());
+        }
+        
         closeCompactMode();
 
         MutableAttributeSet style;
@@ -496,12 +539,13 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             style = styles.standard(color);
         }
         print(getTimePrefix(), style);
-        printUser(user, action, message.whisper, message.id);
+        printUser(user, action, message.whisper, message.id, background);
         
         // Change style for text if /me and no highlight (if enabled)
-        if (!highlighted && color == null && action && styles.actionColored()) {
+        if (!highlighted && color == null && action && styles.isEnabled(Setting.ACTION_COLORED)) {
             style = styles.standard(user.getDisplayColor());
         }
+        print(" ", style);
         printSpecialsNormal(text, user, style, emotes, false, message.bits > 0,
                 message.highlightMatches,
                 message.replaceMatches, message.replacement);
@@ -513,6 +557,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             setCustomBackgroundColor(doc.getLength(), message.backgroundColor);
         }
         finishLine();
+        
+        lastUsers.add(new MentionCheck(user));
     }
     
     public void printInfoMessage(InfoMessage message) {
@@ -952,7 +998,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param targetMsgId The id of the deleted message, null if no specific message
      */
     public void userBanned(User user, long duration, String reason, String targetMsgId) {
-        if (styles.showBanMessages()) {
+        if (styles.isEnabled(Setting.SHOW_BANMESSAGES)) {
             //-----------------------
             // For extra ban message
             //-----------------------
@@ -976,7 +1022,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             }
 
             Element prevMessage = null;
-            if (styles.combineBanMessages()) {
+            if (styles.isEnabled(Setting.COMBINE_BAN_MESSAGES)) {
                 prevMessage = findPreviousBanMessage(user, message);
             }
             if (prevMessage != null) {
@@ -1003,7 +1049,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
          * value == 0 means strike through
          * value < 0 means delete message
          */
-        boolean delete = styles.deletedMessagesMode() < DELETED_MESSAGES_KEEP;
+        int mode = styles.getInt(Setting.DELETED_MESSAGES_MODE);
+        boolean delete = mode < DELETED_MESSAGES_KEEP;
         
         boolean first = true;
         for (Userline l : getUserLines(user)) {
@@ -1015,7 +1062,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 if (delete) {
                     deleteMessage(l.line);
                 } else {
-                    strikeThroughMessage(l.line, styles.deletedMessagesMode());
+                    strikeThroughMessage(l.line, mode);
                 }
                 if (first) {
                     setBanInfo(l.line, banInfo);
@@ -1762,10 +1809,10 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param user
      * @param action 
      * @param whisper 
-     * @param id 
+     * @param msgId 
      */
     private void printUser(User user, boolean action,
-            boolean whisper, String id) {
+            boolean whisper, String msgId, Color background) {
         
         // Decide on name based on settings and available names
         String userName;
@@ -1783,17 +1830,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             userName = user.getName();
         }
         
-//        if (user.hasCustomNickSet()
-//                || styles.namesMode() != SettingsManager.NAMES_MODE_USERNAME 
-//                || (user.hasRegularDisplayNick()
-//                    || styles.namesMode() != SettingsManager.NAMES_MODE_CAPITALIZED)) {
-//            userName = user.getCustomNick();
-//        } else {
-//            userName = user.getNick();
-//        }
-        
         // Badges or Status Symbols
-        if (styles.showUsericons()) {
+        if (styles.isEnabled(Setting.USERICONS_ENABLED)) {
             printUserIcons(user);
         }
         else {
@@ -1802,14 +1840,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         
         // Output name
         if (user.hasCategory("rainbow")) {
-            printRainbowUser(user, userName, action, SpecialColor.RAINBOW, id);
+            printRainbowUser(user, userName, action, SpecialColor.RAINBOW, msgId);
         } else if (user.hasCategory("golden")) {
-            printRainbowUser(user, userName, action, SpecialColor.GOLD, id);
+            printRainbowUser(user, userName, action, SpecialColor.GOLD, msgId);
         } else {
-            MutableAttributeSet style = styles.messageUser(user);
-            if (id != null) {
-                style.addAttribute(Attribute.ID, id);
-            }
+            MutableAttributeSet style = styles.messageUser(user, msgId, background);
             if (whisper) {
                 if (action) {
                     print(">>["+userName + "]", style);
@@ -1826,7 +1861,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         // Add username in parentheses behind, if necessary
         if (!user.hasRegularDisplayNick() && !user.hasCustomNickSet()
                 && styles.namesMode() == SettingsManager.DISPLAY_NAMES_MODE_BOTH) {
-            MutableAttributeSet style = styles.messageUser(user);
+            MutableAttributeSet style = styles.messageUser(user, msgId, background);
             StyleConstants.setBold(style, false);
             int fontSize = StyleConstants.getFontSize(style) - 2;
             if (fontSize <= 0) {
@@ -1840,9 +1875,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         // Requires user style because it needs the metadata to detect the end
         // of the nick when deleting messages (and possibly other stuff)
         if (!action && !whisper) {
-            print(": ", styles.messageUser(user));
+            print(":", styles.messageUser(user, msgId, background));
         } else {
-            print(" ", styles.messageUser(user));
+            //print(" ", styles.messageUser(user));
         }
     }
     
@@ -1914,7 +1949,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param user 
      */
     private void printUserIcons(User user) {
-        java.util.List<Usericon> badges = user.getBadges(styles.botBadgeEnabled());
+        boolean botBadgeEnabled = styles.isEnabled(Setting.BOT_BADGE_ENABLED);
+        java.util.List<Usericon> badges = user.getBadges(botBadgeEnabled);
         if (badges != null) {
             for (Usericon badge : badges) {
                 if (badge.image != null && !badge.removeBadge) {
@@ -2123,30 +2159,26 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         finishLine();
     }
 
+    /**
+     * For info messages. Only applys links and mentions.
+     */
     private void printSpecialsInfo(String text, AttributeSet style,
             java.util.List<Match> highlightMatches) {
         TreeMap<Integer,Integer> ranges = new TreeMap<>();
         HashMap<Integer,MutableAttributeSet> rangesStyle = new HashMap<>();
+        
         findLinks(text, ranges, rangesStyle, style);
         
+        if (styles.isEnabled(Setting.MENTIONS_INFO)) {
+            findMentions(text, ranges, rangesStyle, style, Setting.MENTIONS_INFO);
+        }
+        
+        // Actually output it
         printSpecials(null, text, style, ranges, rangesStyle, highlightMatches);
     }
     
     /**
-     * Print special stuff in the text like links and emoticons differently.
-     * 
-     * First a map of all special stuff that can be found in the text is built,
-     * in a way that stuff doesn't overlap with previously found stuff.
-     * 
-     * Then all the special stuff in this map is printed accordingly, while
-     * printing the stuff inbetween with regular style.
-     * 
-     * @param text 
-     * @param user 
-     * @param style 
-     * @param emotes 
-     * @param ignoreLinks 
-     * @param containsBits 
+     * For user messages. Applys replacements, links, emotes, bits, mentions.
      */
     protected void printSpecialsNormal(String text, User user, MutableAttributeSet style,
             TagEmotes emotes, boolean ignoreLinks, boolean containsBits,
@@ -2163,13 +2195,18 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             findLinks(text, ranges, rangesStyle, styles.standard());
         }
         
-        if (styles.showEmoticons()) {
+        if (styles.isEnabled(Setting.EMOTICONS_ENABLED)) {
             findEmoticons(text, user, ranges, rangesStyle, emotes);
             if (containsBits) {
                 findBits(main.emoticons.getCheerEmotes(), text, ranges, rangesStyle, user);
             }
         }
         
+        if (styles.isEnabled(Setting.MENTIONS)) {
+            findMentions(text, ranges, rangesStyle, style, Setting.MENTIONS);
+        }
+        
+        // Actually output it
         printSpecials(user, text, style, ranges, rangesStyle, highlightMatches);
     }
     
@@ -2188,25 +2225,27 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             if (start > lastPrintedPos) {
                 // If there is anything between the special stuff, print that
                 // first as regular text
-//                String processed = processText(user, text.substring(lastPrintedPos, start));
-//                print(processed, style);
                 specialPrint(user, text, lastPrintedPos, start, style, highlightMatches);
             }
             AttributeSet rangeStyle = rangesStyle.get(start);
             String rangeText;
             if (rangeStyle.containsAttribute(Attribute.IS_REPLACEMENT, true)) {
                 rangeText = (String)rangeStyle.getAttribute(Attribute.REPLACED_WITH);
+                if (!rangeText.isEmpty()) {
+                    print(rangeText, rangeStyle);
+                }
             } else {
-                rangeText = text.substring(start, end + 1);
-            }
-            if (!rangeText.isEmpty()) {
-                print(rangeText, rangeStyle);
+                if (styles.isEnabled(Setting.HIGHLIGHT_MATCHES_ALL)
+                        && StyleConstants.getIcon(rangeStyle) == null) {
+                    specialPrint(user, text, start, end+1, rangeStyle, highlightMatches);
+                } else {
+                    print(text.substring(start, end+1), rangeStyle);
+                }
             }
             lastPrintedPos = end + 1;
         }
         // If anything is left, print that as well as regular text
         if (lastPrintedPos < text.length()) {
-//            print(processText(user, text.substring(lastPrintedPos)), style);
             specialPrint(user, text, lastPrintedPos, text.length(), style, highlightMatches);
         }
     }
@@ -2263,7 +2302,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     private String processText(User user, String text) {
         String result = Helper.htmlspecialchars_decode(text);
         result = StringUtil.removeDuplicateWhitespace(result);
-        int filterMode = styles.filterCombiningCharacters();
+        result = Helper.removeEmojiVariationSelector(result);
+        int filterMode = styles.getInt(Setting.FILTER_COMBINING_CHARACTERS);
         if (filterMode > Helper.FILTER_COMBINING_CHARACTERS_OFF) {
             String prev = result;
             result = Helper.filterCombiningCharacters(result, "****", filterMode);
@@ -2322,12 +2362,49 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
     }
     
+    private void findMentions(String text,
+            Map<Integer, Integer> ranges,
+            Map<Integer, MutableAttributeSet> rangesStyle,
+            AttributeSet baseStyle,
+            Setting setting) {
+        Set<User> alreadyChecked = new HashSet<>();
+        for (MentionCheck check : lastUsers.getItems()) {
+            if (alreadyChecked.contains(check.user)) {
+                continue;
+            }
+            alreadyChecked.add(check.user);
+            Matcher m = check.matcher.reset(text);
+            while (m.find()) {
+                int start = m.start();
+                int end = m.end() - 1;
+                if (!inRanges(start, ranges) && !inRanges(end, ranges)) {
+                    ranges.put(start, end);
+                    rangesStyle.put(start, styles.mention(check.user, baseStyle, setting));
+                }
+            }
+        }
+    }
+    
+    private int fCount = 0;
+    private final Random fRand = new Random();
+    private long fSeed;
+    
+    public int getRand(int bound) {
+        long seed = System.currentTimeMillis() / 20000;
+        if (seed != fSeed) {
+            fRand.setSeed(seed);
+            fSeed = seed;
+        }
+        return fRand.nextInt(bound);
+    }
     
     private void findEmoticons(String text, User user, Map<Integer, Integer> ranges,
             Map<Integer, MutableAttributeSet> rangesStyle, TagEmotes tagEmotes) {
         
         findEmoticons(user, main.emoticons.getCustomEmotes(), text, ranges, rangesStyle);
-        findEmoticons(user, main.emoticons.getEmoji(), text, ranges, rangesStyle);
+        if (Debugging.isEnabled("emoji2") || EmojiUtil.mightContainEmoji(text)) {
+            findEmoticons(user, main.emoticons.getEmoji(), text, ranges, rangesStyle);
+        }
         
         if (tagEmotes != null) {
             // Add emotes from tags
@@ -2464,7 +2541,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 // found) and move on
                 int start = m.start();
                 int end = m.end() - 1;
-                addEmoticon(emoticon, start, end, ranges, rangesStyle);
+                // For Emoji, check for text style variation selector
+                boolean textEmoji = emoticon.type == Emoticon.Type.EMOJI && m.group().endsWith("\uFE0E");
+                if (!textEmoji) {
+                    addEmoticon(emoticon, start, end, ranges, rangesStyle);
+                }
             }
         }
     }
@@ -2861,11 +2942,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             if (fixedChat || pauseKeyPressed) {
                 return false;
             }
-            if (!styles.autoScroll()) {
+            if (!styles.isEnabled(Setting.AUTO_SCROLL)) {
                 return false;
             }
             long timePassed = System.currentTimeMillis() - lastManualScrollChange;
-            if (timePassed > 1000 * styles.autoScrollTimeout()) {
+            if (timePassed > 1000 * styles.getInt(Setting.AUTO_SCROLL_TIME)) {
                 LOGGER.info("ScrolledUp Timeout (" + timePassed + ")");
                 return true;
             }
@@ -3289,6 +3370,10 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addSetting(Setting.PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, false);
             addSetting(Setting.EMOTICONS_SHOW_ANIMATED, false);
             addSetting(Setting.SHOW_TOOLTIPS, true);
+            addNumericSetting(Setting.MENTIONS, 0, 0, 200);
+            addNumericSetting(Setting.MENTIONS_INFO, 0, 0, 200);
+            addSetting(Setting.HIGHLIGHT_MATCHES_ALL, true);
+            addNumericSetting(Setting.USERCOLOR_BACKGROUND, 1, 0, 200);
             addNumericSetting(Setting.FILTER_COMBINING_CHARACTERS, 1, 0, 2);
             addNumericSetting(Setting.DELETED_MESSAGES_MODE, 30, -1, 9999999);
             addNumericSetting(Setting.BUFFER_SIZE, 250, BUFFER_SIZE_MIN, BUFFER_SIZE_MAX);
@@ -3297,8 +3382,10 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addNumericSetting(Setting.EMOTICON_SCALE_FACTOR, 100, 1, 200);
             addNumericSetting(Setting.DISPLAY_NAMES_MODE, 0, 0, 10);
             addNumericSetting(Setting.BOTTOM_MARGIN, -1, -1, 100);
+            addNumericSetting(Setting.HIGHLIGHT_HOVERED_USER, 0, 0, 4);
             timestampFormat = styleServer.getTimestampFormat();
             linkController.setPopupEnabled(settings.get(Setting.SHOW_TOOLTIPS));
+            linkController.setUserHoverHighlightMode(getInt(Setting.HIGHLIGHT_HOVERED_USER));
         }
         
         /**
@@ -3508,19 +3595,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             return styles.get("clearSearchResult");
         }
         
-        /**
-         * Makes a style for the given User, containing the User-object itself
-         * and the user-color. Changes the color to hopefully improve readability.
-         * 
-         * @param user The User-object to base this style on
-         * @param style Attributes to base the user style on
-         * @return 
-         */
-        public MutableAttributeSet messageUser(User user) {
-            SimpleAttributeSet userStyle = new SimpleAttributeSet(nick());
-            userStyle.addAttribute(Attribute.IS_USER_MESSAGE, true);
-            userStyle.addAttribute(Attribute.USER, user);
-            
+        private Color getUserColor(User user) {
             // Color
             Color userColor = user.getColor();
             // Only correct color if no custom color is defined
@@ -3529,8 +3604,51 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 userColor = colorCorrector.correctColor(userColor, getBackground());
                 user.setCorrectedColor(userColor);
             }
-            StyleConstants.setForeground(userStyle, userColor);
+            return userColor;
+        }
+        
+        /**
+         * Makes a style for the given User, containing the User-object itself
+         * and the user-color. Changes the color to hopefully improve readability.
+         * 
+         * @param user The User object to configure this style for
+         * @param msgId The msg-id of this line (may be null)
+         * @param background The background color used for this line, may be
+         * null (e.g. if not using a custom background)
+         * @return 
+         */
+        public MutableAttributeSet messageUser(User user, String msgId, Color background) {
+            SimpleAttributeSet userStyle = new SimpleAttributeSet(nick());
+            userStyle.addAttribute(Attribute.IS_USER_MESSAGE, true);
+            userStyle.addAttribute(Attribute.USER, user);
             
+            Color foreground = getUserColor(user);
+            StyleConstants.setForeground(userStyle, foreground);
+//            if (background != null) {
+//                System.out.println(user+" "+ColorCorrectionNew.getLightnessDifference(foreground, background));
+//            }
+            int threshold;
+            switch(getInt(Setting.USERCOLOR_BACKGROUND)) {
+                case 1:
+                    threshold = 38;
+                    break;
+                case 2:
+                    threshold = 89;
+                    break;
+                default:
+                    threshold = 0;
+            }
+            if (threshold > 0 && background != null) {
+                int difference = ColorCorrectionNew.getLightnessDifferenceAbs(foreground, background);
+                if (difference < threshold
+                        && ColorCorrectionNew.getLightnessDifferenceAbs(foreground, getBackground()) > difference) {
+                    MyStyleConstants.setLabelBackground(userStyle, getBackground());
+                }
+            }
+                    
+            if (msgId != null) {
+                userStyle.addAttribute(Attribute.ID, msgId);
+            }
             return userStyle;
         }
         
@@ -3538,6 +3656,23 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             SimpleAttributeSet userStyle = new SimpleAttributeSet(style);
             userStyle.addAttribute(Attribute.USER, user);
             return userStyle;
+        }
+        
+        public MutableAttributeSet mention(User user, AttributeSet style,
+                Setting setting) {
+            int settingValue = numericSettings.get(setting);
+            SimpleAttributeSet mentionStyle = new SimpleAttributeSet(style);
+            if (MiscUtil.biton(settingValue, 1)) {
+                StyleConstants.setBold(mentionStyle, true);
+            }
+            if (MiscUtil.biton(settingValue, 2)) {
+                StyleConstants.setUnderline(mentionStyle, true);
+            }
+            if (MiscUtil.biton(settingValue, 3)) {
+                StyleConstants.setForeground(mentionStyle, getUserColor(user));
+            }
+            mentionStyle.addAttribute(Attribute.MENTION, user);
+            return mentionStyle;
         }
         
         /**
@@ -3562,18 +3697,6 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             }
             return style;
         }
-
-        public boolean showTimestamp() {
-            return settings.get(Setting.TIMESTAMP_ENABLED);
-        }
-        
-        public boolean showUsericons() {
-            return settings.get(Setting.USERICONS_ENABLED);
-        }
-        
-        public boolean showEmoticons() {
-            return settings.get(Setting.EMOTICONS_ENABLED);
-        }
         
         public int emoticonMaxHeight() {
             return numericSettings.get(Setting.EMOTICON_MAX_HEIGHT);
@@ -3583,43 +3706,14 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             return (float)(numericSettings.get(Setting.EMOTICON_SCALE_FACTOR) / 100.0);
         }
         
-        public boolean botBadgeEnabled() {
-            return settings.get(Setting.BOT_BADGE_ENABLED);
-        }
-        
-        public int filterCombiningCharacters() {
-            return numericSettings.get(Setting.FILTER_COMBINING_CHARACTERS);
-        }
-        
-        public boolean showBanMessages() {
-            return settings.get(Setting.SHOW_BANMESSAGES);
-        }
-        
-        public boolean combineBanMessages() {
-            return settings.get(Setting.COMBINE_BAN_MESSAGES);
-        }
-        
-        public boolean autoScroll() {
-            return settings.get(Setting.AUTO_SCROLL);
-        }
-        
-        public Integer autoScrollTimeout() {
-            return numericSettings.get(Setting.AUTO_SCROLL_TIME);
-        }
-        
-        public boolean actionColored() {
-            return settings.get(Setting.ACTION_COLORED);
-        }
-        
-        public boolean deleteMessages() {
-            return settings.get(Setting.DELETE_MESSAGES);
-        }
-
-        public int deletedMessagesMode() {
-            return (int)numericSettings.get(Setting.DELETED_MESSAGES_MODE);
+        public int getInt(Setting setting) {
+            return (int)numericSettings.get(setting);
         }
         
         public boolean isEnabled(Setting setting) {
+            if (setting == Setting.MENTIONS || setting == Setting.MENTIONS_INFO) {
+                return MiscUtil.biton(numericSettings.get(setting), 0);
+            }
             return settings.get(setting);
         }
         
@@ -3686,7 +3780,15 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         }
     }
     
-
+    private static class MentionCheck {
+        public final User user;
+        public final Matcher matcher;
+        
+        public MentionCheck(User user) {
+            this.user = user;
+            this.matcher = Pattern.compile("(?i)\\b"+Pattern.quote(user.getName())+"\\b").matcher("");
+        }
+    }
     
 }
 

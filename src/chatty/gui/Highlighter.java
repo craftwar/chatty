@@ -7,6 +7,7 @@ import chatty.Helper;
 import chatty.Logging;
 import chatty.User;
 import chatty.util.Debugging;
+import chatty.util.MiscUtil;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -230,7 +231,7 @@ public class Highlighter {
     private void addMatch(User user, HighlightItem item) {
         if (highlightNextMessages && user != null) {
             String username = user.getName();
-            lastHighlighted.put(username, System.currentTimeMillis());
+            lastHighlighted.put(username, MiscUtil.ems());
             lastHighlightedItem.put(username, item);
         }
     }
@@ -244,7 +245,7 @@ public class Highlighter {
         Iterator<Map.Entry<String, Long>> it = lastHighlighted.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, Long> entry = it.next();
-            if (System.currentTimeMillis() - entry.getValue() > LAST_HIGHLIGHTED_TIMEOUT) {
+            if (MiscUtil.ems() - entry.getValue() > LAST_HIGHLIGHTED_TIMEOUT) {
                 it.remove();
                 lastHighlightedItem.remove(entry.getKey());
             }
@@ -919,6 +920,31 @@ public class Highlighter {
         @Override
         public String toString() {
             return start+"-"+end;
+        }
+        
+        /**
+         * Add to the index of all Match objects in the given list of matches.
+         * Resulting negative indices are set to 0, if start and end are equal
+         * the match is not added to the result.
+         * 
+         * @param input The input list
+         * @param shift How much to add to the indices
+         * @return A new list with new Match objects, or the same as input if it
+         * was null or empty
+         */
+        public static List<Match> shiftMatchList(List<Match> input, int shift) {
+            if (input == null || input.isEmpty()) {
+                return input;
+            }
+            List<Match> result = new ArrayList<>();
+            for (Match m : input) {
+                int start = Math.max(m.start + shift, 0);
+                int end = Math.max(m.end + shift, 0);
+                if (start != end) {
+                    result.add(new Match(start, end));
+                }
+            }
+            return result;
         }
 
     }

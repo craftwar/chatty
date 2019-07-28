@@ -6,6 +6,7 @@ import chatty.User;
 import chatty.gui.LinkListener;
 import chatty.gui.MouseClickedListener;
 import chatty.gui.UserListener;
+import chatty.gui.components.Channel;
 import chatty.gui.components.menus.ChannelContextMenu;
 import chatty.gui.components.menus.ContextMenu;
 import chatty.gui.components.menus.ContextMenuListener;
@@ -13,6 +14,9 @@ import chatty.gui.components.menus.EmoteContextMenu;
 import chatty.gui.components.menus.UrlContextMenu;
 import chatty.gui.components.menus.UserContextMenu;
 import chatty.gui.components.menus.UsericonContextMenu;
+import static chatty.gui.components.textpane.SettingConstants.USER_HOVER_HL_CTRL;
+import static chatty.gui.components.textpane.SettingConstants.USER_HOVER_HL_MENTIONS;
+import static chatty.gui.components.textpane.SettingConstants.USER_HOVER_HL_MENTIONS_CTRL_ALL;
 import chatty.util.Debugging;
 import chatty.util.StringUtil;
 import chatty.util.api.Emoticon;
@@ -29,6 +33,7 @@ import java.awt.event.MouseEvent;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JLabel;
@@ -63,6 +68,10 @@ public class LinkController extends MouseAdapter {
      * When a User is clicked, the User object is send here
      */
     private final Set<UserListener> userListener = new HashSet<>();
+    
+    private Consumer<User> userHoverListener;
+    private int userHoverHighlightMode;
+    
     /**
      * When a link is clicked, the String with the url is send here
      */
@@ -73,6 +82,8 @@ public class LinkController extends MouseAdapter {
     private ContextMenuListener contextMenuListener;
     
     private ContextMenu defaultContextMenu;
+    
+    private Channel channel;
     
     private MyPopup popup = new MyPopup();
     
@@ -87,6 +98,14 @@ public class LinkController extends MouseAdapter {
         if (listener != null) {
             userListener.add(listener);
         }
+    }
+    
+    public void setUserHoverListener(Consumer<User> listener) {
+        this.userHoverListener = listener;
+    }
+    
+    public void setUserHoverHighlightMode(int mode) {
+        this.userHoverHighlightMode = mode;
     }
     
     /**
@@ -124,6 +143,10 @@ public class LinkController extends MouseAdapter {
         defaultContextMenu = contextMenu;
         contextMenu.addContextMenuListener(contextMenuListener);
     }
+    
+    public void setChannel(Channel channel) {
+        this.channel = channel;
+    }
    
     /**
      * Handles mouse presses. This is favourable to mouseClicked because it
@@ -155,10 +178,12 @@ public class LinkController extends MouseAdapter {
             if (linkListener != null) {
                 linkListener.linkClicked(url);
             }
-        } else if ((user = getUser(element)) != null) {
+        } else if ((user = getUser(element)) != null
+                || (user = getMention(element)) != null) {
             for (UserListener listener : userListener) {
+                final User finalUser = user;
                 SwingUtilities.invokeLater(() -> {
-                    listener.userClicked(user, getMsgId(element), getAutoModMsgId(element), e);
+                    listener.userClicked(finalUser, getMsgId(element), getAutoModMsgId(element), e);
                 });
             }
         } else if ((emoteImage = getEmoticonImage(element)) != null) {
@@ -225,8 +250,11 @@ public class LinkController extends MouseAdapter {
             popup.hide();
         }
 
+        User user = null;
+        User mention = null;
         boolean isClickableElement = (getUrl(element) != null && !isUrlDeleted(element))
-                || getUser(element) != null
+                || (user = getUser(element)) != null
+                || (mention = getMention(element)) != null
                 || emoteImage != null
                 || usericon != null;
         
@@ -234,6 +262,22 @@ public class LinkController extends MouseAdapter {
             textPane.setCursor(HAND_CURSOR);
         } else {
             textPane.setCursor(NORMAL_CURSOR);
+        }
+        if (userHoverListener != null) {
+            if (user == null) {
+                user = mention;
+            }
+            // Don't highlight depending on setting, whether it's a mention and
+            // ctrl is being held
+            if ((userHoverHighlightMode == USER_HOVER_HL_MENTIONS_CTRL_ALL
+                        && mention == null && !e.isControlDown())
+                    || (userHoverHighlightMode == USER_HOVER_HL_CTRL
+                        && !e.isControlDown())
+                    || (userHoverHighlightMode == USER_HOVER_HL_MENTIONS
+                        && mention == null)) {
+                user = null;
+            }
+            userHoverListener.accept(user);
         }
     }
     
@@ -256,6 +300,10 @@ public class LinkController extends MouseAdapter {
 
     private User getUser(Element e) {
         return (User) e.getAttributes().getAttribute(ChannelTextPane.Attribute.USER);
+    }
+    
+    private User getMention(Element e) {
+        return (User) e.getAttributes().getAttribute(ChannelTextPane.Attribute.MENTION);
     }
     
     private String getMsgId(Element e) {
@@ -326,10 +374,13 @@ public class LinkController extends MouseAdapter {
             return;
         }
         User user = getUser(element);
+        if (user == null) {
+            user = getMention(element);
+        }
         String url = getUrl(element);
         EmoticonImage emoteImage = getEmoticonImage(element);
         Usericon usericon = getUsericon(element);
-        JPopupMenu m;
+        JPopupMenu m = null;
         if (user != null) {
             m = new UserContextMenu(user, getMsgId(element),
                     getAutoModMsgId(element), contextMenuListener);
@@ -345,12 +396,16 @@ public class LinkController extends MouseAdapter {
         }
         else {
             if (defaultContextMenu == null) {
-                m = new ChannelContextMenu(contextMenuListener);
+                if (channel != null) {
+                    m = new ChannelContextMenu(contextMenuListener, channel);
+                }
             } else {
                 m = defaultContextMenu;
             }
         }
-        m.show(e.getComponent(), e.getX(), e.getY());
+        if (m != null) {
+            m.show(e.getComponent(), e.getX(), e.getY());
+        }
         popup.hide();
     }
     
@@ -598,7 +653,8 @@ public class LinkController extends MouseAdapter {
             if (e.isLeaf() && e.getParentElement() != null) {
                 Element parent = e.getParentElement();
                 int elementIndex = parent.getElementIndex(e.getStartOffset());
-                result.append("Index: ").append(elementIndex).append(" - Count: ").append(parent.getElementCount());
+                result.append("Index: ").append(elementIndex).append(" of ").append(parent.getElementCount());
+                result.append(" (Length: ").append(e.getEndOffset() - e.getStartOffset()).append(")");
                 result.append("<br />");
             }
         } catch (BadLocationException ex) {
@@ -612,7 +668,9 @@ public class LinkController extends MouseAdapter {
             while (en.hasMoreElements()) {
                 Object key = en.nextElement();
                 Object value = attrs.getAttribute(key);
-                result.append(key).append(" => ").append(value);
+                result.append(Helper.htmlspecialchars_encode(String.valueOf(key)));
+                result.append(" => ");
+                result.append(Helper.htmlspecialchars_encode(String.valueOf(value)));
                 result.append("<br />");
             }
             attrs = attrs.getResolveParent();

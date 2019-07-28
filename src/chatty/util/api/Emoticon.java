@@ -3,8 +3,11 @@ package chatty.util.api;
 
 import chatty.Helper;
 import chatty.User;
+import chatty.gui.components.textpane.ChannelTextPane;
+import chatty.util.DateTime;
 import chatty.util.HalfWeakSet;
 import chatty.util.ImageCache;
+import chatty.util.MiscUtil;
 import chatty.util.StringUtil;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -25,6 +28,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -102,6 +106,7 @@ public class Emoticon {
     public final boolean literal;
     public final int numericId;
     public final String stringId;
+    public final String stringIdAlias;
     public final String urlX2;
     public final String creator;
     
@@ -141,6 +146,7 @@ public class Emoticon {
         private int emoteset = SET_UNDEFINED;
         private int numericId = ID_UNDEFINED;
         private String stringId = null;
+        private String stringIdAlias = null;
         private String creator;
         private boolean isAnimated = false;
         
@@ -193,6 +199,11 @@ public class Emoticon {
         
         public Builder setStringId(String id) {
             this.stringId = id;
+            return this;
+        }
+        
+        public Builder setStringIdAlias(String id) {
+            this.stringIdAlias = id;
             return this;
         }
         
@@ -326,6 +337,7 @@ public class Emoticon {
         this.literal = builder.literal;
         this.numericId = builder.numericId;
         this.stringId = builder.stringId;
+        this.stringIdAlias = builder.stringIdAlias;
         this.creator = builder.creator;
         this.infos = builder.infos;
         this.isAnimated = builder.isAnimated;
@@ -338,9 +350,16 @@ public class Emoticon {
             int flags = 0;
             
             if (type == Type.EMOJI) {
-                // Some Emoji seemed to not compile without this, although not
-                // sure why, but just do it just in case
-                flags = Pattern.LITERAL;
+                /**
+                 * Match variation selectors for text and emoji style, if
+                 * present, so it's included in the Emoji image and not visible.
+                 * If \uFE0E (text style) is at the end of the match, it should
+                 * not be turned into an image (although not sure how often that
+                 * actually occurs).
+                 * 
+                 * http://mts.io/2015/04/21/unicode-symbol-render-text-emoji/
+                 */
+                search = Pattern.quote(search)+"[\uFE0E\uFE0F]?";
             } else {
                 // Any regular emotes should be separated by spaces
                 if (literal) {
@@ -782,12 +801,18 @@ public class Emoticon {
              * loaded according to the MediaTracker though, so check that as
              * well. Not quite sure what that means exactly though.
              */
+            boolean gif = isAnimated || (icon.getDescription() != null && icon.getDescription().startsWith("GIF"));
             if ((icon.getIconWidth() != targetSize.width
                     || icon.getIconHeight() != targetSize.height)
-                    && (icon.getDescription() == null || !icon.getDescription().startsWith("GIF"))) {
+                    && !gif) {
                 Image scaled = getScaledImage(icon.getImage(), targetSize.width,
                         targetSize.height);
                 icon.setImage(scaled);
+            } else if (icon.getIconWidth() > MAX_SCALED_WIDTH
+                    || icon.getIconHeight() > MAX_SCALED_HEIGHT) {
+                // Fail-safe for accidentally large images that can't be scaled
+                // (e.g. GIF)
+                return null;
             }
 
             /**
