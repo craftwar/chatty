@@ -50,7 +50,7 @@ public class ChannelCompletion implements AutoCompletionServer {
     }
     
     private final Set<String> commands = new TreeSet<>(Arrays.asList(new String[]{
-        "subscribers", "subscribersOff", "timeout", "ban", "unban", "host", "unhost", "raid", "unraid", "clear", "mods",
+        "subscribers", "subscribersOff", "timeout", "ban", "unban", "host", "unhost", "raid", "unraid", "mods",
         "join", "part", "close", "reconnect", "slow", "slowOff", "r9k", "r9koff", "emoteOnly", "emoteOnlyOff",
         "connection", "uptime", "appInfo", "releaseInfo",
         "dir", "wdir", "openDir", "openWdir",
@@ -64,7 +64,7 @@ public class ChannelCompletion implements AutoCompletionServer {
         "ignore", "unignore", "ignoreWhisper", "unignoreWhisper", "ignoreChat", "unignoreChat",
         "follow", "unfollow", "ffzws", "followers", "followersoff",
         "setcolor", "untimeout", "userinfo", "joinHosted", "favorite", "unfavorite",
-        "popoutchannel"
+        "popoutchannel", "loli"
     }));
 
     private final Set<String> prefixesPreferUsernames = new HashSet<>(Arrays.asList(new String[]{
