@@ -81,7 +81,8 @@ jar {
 // Builds a jar that includes not only the compiled files from this project, but also the .class files from the
 // dependencies. This removes the need for a separate 'libs' directory when Chatty is installed.
 shadowJar {
-	minimize()
+	// cause problem
+	//minimize()
     // A suffix for the release jar name. By default this is '-all', which gives a name like 'Chatty-v0.8.3b3-all.jar'
     classifier = null
 
