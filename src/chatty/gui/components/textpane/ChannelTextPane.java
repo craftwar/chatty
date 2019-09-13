@@ -502,20 +502,28 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
 
         Color color = message.color;
         boolean action = message.action;
-        // add SKLive pixiv tag [p][i] support
+        // 1. add SKLive pixiv tag [p][i] support
         // [14:16] 宅檸 (lemonken0805): [p]64970215[i]  (我沒在用SKLive，感謝大台主檸檬協助)
 		// [23:50] po246: [p] 65488924 [i]
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=64970215
+        // 2. make sure [s][e] tag clickable
         String text = null;
-        int index_p=0, index_i=0;
-        index_p = message.text.indexOf("[p]");
-        if (index_p != -1) {
-            index_i = message.text.indexOf("[i]", index_p+3);
-        }
-        if ( index_p !=-1 && index_i !=-1)
-            text = message.text + " https://www.pixiv.net/member_illust.php?mode=medium&illust_id=" + message.text.substring(index_p+3, index_i).trim();
-        else
+        int index_start=0, index_end=0;
+        index_start = message.text.indexOf("[p]");
+        if (index_start != -1 && message.text.length() >= index_start + 3 + 1) {
+            index_end = message.text.indexOf("[i]", index_start+3);
+            if (index_end !=-1)
+                text = message.text + " https://www.pixiv.net/member_illust.php?mode=medium&illust_id=" + message.text.substring(index_start+3, index_end).trim();
+        } else if ( (index_start = message.text.indexOf("[s]")) != -1 &&
+                    message.text.length() >= index_start + 3 + 1) {
+            index_end = message.text.indexOf("[e]", index_start+3);
+            if (index_end !=-1)
+                text = message.text.substring(0, index_start) + " " + message.text.substring(index_start+3, index_end).trim();
+                if (message.text.length() >= index_end + 3 + 1)
+                    text += " " + message.text.substring(index_end + 3);
+        } else
             text = message.text;
+
         TagEmotes emotes = message.emotes;
         boolean highlighted = message.highlighted;
         if (message.whisper && message.action) {
