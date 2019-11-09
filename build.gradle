@@ -11,7 +11,7 @@ compileJava.options.encoding = 'UTF-8'
 compileTestJava.options.encoding = 'UTF-8'
 
 sourceCompatibility = 1.8
-targetCompatibility = JavaVersion.VERSION_12
+targetCompatibility = JavaVersion.VERSION_13
 
 // Tells Netbeans what the main class is
 ext.mainClass = 'chatty.Chatty'
