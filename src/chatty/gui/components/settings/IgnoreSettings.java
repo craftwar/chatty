@@ -26,9 +26,6 @@ import static javax.swing.WindowConstants.HIDE_ON_CLOSE;
  */
 public class IgnoreSettings extends SettingsPanel {
     
-    private static final String INFO_IGNORE = HighlightSettings.INFO
-            +"Example: <code>chan:joshimuz start:!bet</code>";
-    
     private final IgnoredUsers ignoredUsers;
     
     public IgnoreSettings(SettingsDialog d) {
@@ -105,9 +102,10 @@ public class IgnoreSettings extends SettingsPanel {
         gbc.weighty = 1;
         gbc.weightx = 1;
         ListSelector items = d.addListSetting("ignore", "Ignore", 390, 160, true, true);
-        items.setInfo(INFO_IGNORE);
+        items.setInfo(HighlightSettings.getMatchingHelp("ignore"));
         HighlighterTester tester = new HighlighterTester(d, false);
         tester.setLinkLabelListener(d.getLinkLabelListener());
+        items.setInfoLinkLabelListener(d.getLinkLabelListener());
         items.setEditor(tester);
         items.setDataFormatter(input -> input.trim());
         base.add(items, gbc);

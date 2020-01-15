@@ -20,7 +20,10 @@ public class TokenInfo {
         EDIT_BROADCAST("user:edit:broadcast", "broadcast"),
         COMMERICALS("channel_commercial", "commercials"),
         SUBSCRIBERS("channel_subscriptions", "subscribers"),
-        FOLLOW("user_follows_edit", "follow");
+        FOLLOW("user_follows_edit", "follow"),
+        SUBSCRIPTIONS("user_subscriptions", "subscriptions"),
+        CHAN_MOD("channel:moderate", "chanMod"),
+        POINTS("channel:read:redemptions", "points");
         
         public String scope;
         public String label;

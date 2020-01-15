@@ -13,7 +13,7 @@ import java.util.Set;
  * @author tduva
  */
 public interface TwitchApiResultListener {
-    void receivedEmoticons(Set<Emoticon> emoticons);
+    void receivedEmoticons(EmoticonUpdate emoteUpdate);
     void receivedCheerEmoticons(Set<CheerEmoticon> emoticons);
     void receivedUsericons(List<Usericon> icons);
     void tokenVerified(String token, TokenInfo tokenInfo);
@@ -37,13 +37,6 @@ public interface TwitchApiResultListener {
     void receivedServer(String channel, String server);
     
     /**
-     * Info retrieved from chat properties.
-     * 
-     * @param chatInfo Can be null if an error occured
-     */
-    void receivedChatInfo(ChatInfo chatInfo);
-    
-    /**
      * Human-readable result message.
      * 
      * @param message 
@@ -51,6 +44,4 @@ public interface TwitchApiResultListener {
     void followResult(String message);
     
     void autoModResult(String result, String msgId);
-    
-    void roomsInfo(RoomsInfo info);
 }

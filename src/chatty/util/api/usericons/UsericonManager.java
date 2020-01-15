@@ -98,6 +98,7 @@ public class UsericonManager {
         addFallbackIcon(Usericon.Type.TURBO, "icon_turbo.png");
         addFallbackIcon(Usericon.Type.GLOBAL_MOD, "icon_globalmod.png");
         addFallbackIcon(Usericon.Type.BOT, "icon_bot.png");
+        addFallbackIcon(Usericon.Type.HL, "icon_hl.png");
 //        addFallbackIcon(Usericon.Type.RESUB, "icon_sub.png");
 //        addFallbackIcon(Usericon.Type.NEWSUB, "icon_sub.png");
 //        List<Usericon> test = new ArrayList<>();
@@ -135,7 +136,8 @@ public class UsericonManager {
         return result;
     }
     
-    public synchronized List<Usericon> getBadges(Map<String, String> badgesDef, User user, boolean botBadgeEnabled) {
+    public synchronized List<Usericon> getBadges(Map<String, String> badgesDef,
+            User user, boolean botBadgeEnabled, boolean pointsHl) {
         List<Usericon> icons = getTwitchBadges(badgesDef, user);
         if (user.isBot() && botBadgeEnabled) {
             Usericon icon = getIcon(Usericon.Type.BOT, null, null, user);
@@ -145,6 +147,12 @@ public class UsericonManager {
         }
         addThirdPartyIcons(icons, user);
         addAddonIcons(icons, user);
+        if (pointsHl) {
+            Usericon icon = getIcon(Usericon.Type.HL, null, null, user);
+            if (icon != null) {
+                icons.add(0, icon);
+            }
+        }
         return icons;
     }
 
@@ -357,12 +365,20 @@ public class UsericonManager {
                 }
             }
         }
-        // Only check if restriction to usernames is set
-        if (icon.usernames != null) {
-            if (!icon.usernames.contains(user.getName())) {
+        // Username/id restriction (can fail only if non-null)
+        boolean usernameR = icon.usernames == null || (user.getName() != null && icon.usernames.contains(user.getName()));
+        boolean useridR = icon.userids == null || (user.getId() != null  && icon.userids.contains(user.getId()));
+        if (icon.usernames != null && icon.userids != null) {
+            // Both are set, so either one may match to not fail
+            if (!usernameR && !useridR) {
                 return false;
             }
         }
+        else if (!usernameR || !useridR) {
+            // Only one set, which also failed
+            return false;
+        }
+        
         // Now check for the other restriction
         if (icon.restriction == null) {
             return true;

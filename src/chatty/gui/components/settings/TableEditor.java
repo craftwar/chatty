@@ -15,6 +15,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
@@ -76,8 +77,8 @@ public class TableEditor<T> extends JPanel {
     
     private final JTextField filterInput = new JTextField();
     
-    private TableEditorListener listener;
-    private TableContextMenu contextMenu;
+    private TableEditorListener<T> listener;
+    private TableContextMenu<T> contextMenu;
 
     /**
      * 
@@ -384,7 +385,7 @@ public class TableEditor<T> extends JPanel {
         String filterText = filterInput.getText();
         RowFilter<ListTableModel<T>, Object> rf = null;
         try {
-            rf = RowFilter.regexFilter(filterText, 0);
+            rf = RowFilter.regexFilter("(?ui)"+Pattern.quote(filterText));
         } catch (PatternSyntaxException ex) {
             return;
         }

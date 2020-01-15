@@ -49,8 +49,11 @@ public class ChannelCompletion implements AutoCompletionServer {
         this.users = users;
     }
     
+    /**
+     * Can contain case, will be completed to that.
+     */
     private final Set<String> commands = new TreeSet<>(Arrays.asList(new String[]{
-        "subscribers", "subscribersOff", "timeout", "ban", "unban", "host", "unhost", "raid", "unraid", "mods",
+        "subscribers", "subscribersOff", "timeout", "ban", "unban", "host", "unhost", "raid", "unraid", "mods", "commercial",
         "join", "part", "close", "reconnect", "slow", "slowOff", "r9k", "r9koff", "emoteOnly", "emoteOnlyOff",
         "connection", "uptime", "appInfo", "releaseInfo",
         "dir", "wdir", "openDir", "openWdir",
@@ -67,10 +70,13 @@ public class ChannelCompletion implements AutoCompletionServer {
         "popoutchannel", "loli"
     }));
 
+    /**
+     * Must be all lowercase for comparison.
+     */
     private final Set<String> prefixesPreferUsernames = new HashSet<>(Arrays.asList(new String[]{
         "/ban ", "/to ", "/setname ", "/resetname ", "/timeout ", "/host ",
-        "/unban ", "/ignore ", "/unignore ", "/ignoreChat ", "/unignoreChat ",
-        "/ignoreWhisper ", "/unignoreWhisper ", "/follow ", "/unfollow ",
+        "/unban ", "/ignore ", "/unignore ", "/ignorechat ", "/unignorechat ",
+        "/ignorewhisper ", "/unignorewhisper ", "/follow ", "/unfollow ",
         "/untimeout ", "/favorite ", "/unfavorite "
     }));
     
@@ -114,6 +120,7 @@ public class ChannelCompletion implements AutoCompletionServer {
     public AutoCompletionServer.CompletionItems getCompletionItems(String type, String prefix, String search) {
         updateSettings();
         String searchLower = StringUtil.toLowerCase(search);
+        prefix = StringUtil.toLowerCase(prefix);
         if (type == null || type.equals("auto")) {
             return getRegularCompletionItems(prefix, searchLower, search);
         } else if (type.equals("special")) {
@@ -125,8 +132,9 @@ public class ChannelCompletion implements AutoCompletionServer {
     /**
      * TAB
      *
-     * @param prefix
-     * @param search
+     * @param prefix Lowercase prefix
+     * @param search Lowercase search
+     * @param searchCase Original search
      * @return
      */
     private AutoCompletionServer.CompletionItems getRegularCompletionItems(String prefix, String search, String searchCase) {
@@ -134,7 +142,7 @@ public class ChannelCompletion implements AutoCompletionServer {
         if (prefix.startsWith("/")
                 && (prefix.equals("/set ") || prefix.equals("/get ")
                 || prefix.equals("/add ") || prefix.equals("/remove ")
-                || prefix.equals("/clearSetting ")
+                || prefix.equals("/clearsetting ")
                 || prefix.equals("/reset "))) {
                 //--------------
             // Setting Names
@@ -171,7 +179,7 @@ public class ChannelCompletion implements AutoCompletionServer {
      * Returns items that depend on current settings, but also some prefixes.
      *
      * @param setting
-     * @param prefix
+     * @param prefix Lowercase prefix
      * @param search
      * @return
      */
@@ -428,22 +436,20 @@ public class ChannelCompletion implements AutoCompletionServer {
         Set<User> customMatched = new HashSet<>();
         Set<User> localizedMatched = new HashSet<>();
         for (User user : users.getData()) {
-            boolean matched = false;
-            if (user.getName().startsWith(search)) {
-                matched = true;
-                regularMatched.add(user);
+            matchUser(user, search, matchedUsers, regularMatched, localizedMatched, customMatched);
+        }
+        
+        // Try to match current channel name if not matched yet
+        if (channel.getRoom().hasStream()) {
+            User channelUser = new User(channel.getStreamName(), Room.EMPTY);
+            boolean channelUserMatched = false;
+            for (User user : matchedUsers) {
+                if (user.getName().equals(channelUser.getName())) {
+                    channelUserMatched = true;
+                }
             }
-            if (!user.hasRegularDisplayNick() && StringUtil.toLowerCase(user.getDisplayNick()).startsWith(search)) {
-                matched = true;
-                localizedMatched.add(user);
-            }
-            if (user.hasCustomNickSet() && StringUtil.toLowerCase(user.getCustomNick()).startsWith(search)) {
-                matched = true;
-                customMatched.add(user);
-            }
-
-            if (matched) {
-                matchedUsers.add(user);
+            if (!channelUserMatched) {
+                matchUser(channelUser, search, matchedUsers, regularMatched, localizedMatched, customMatched);
             }
         }
         switch (main.getSettings().getString("completionSorting")) {
@@ -513,6 +519,28 @@ public class ChannelCompletion implements AutoCompletionServer {
             result.add(new CompletionItem(nick, nickInfo));
         }
         return new CompletionItems(result, "");
+    }
+    
+    private static void matchUser(User user, String search,
+            List<User> matchedUsers, Set<User> regularMatched,
+            Set<User> localizedMatched, Set<User> customMatched) {
+        boolean matched = false;
+        if (user.getName().startsWith(search)) {
+            matched = true;
+            regularMatched.add(user);
+        }
+        if (!user.hasRegularDisplayNick() && StringUtil.toLowerCase(user.getDisplayNick()).startsWith(search)) {
+            matched = true;
+            localizedMatched.add(user);
+        }
+        if (user.hasCustomNickSet() && StringUtil.toLowerCase(user.getCustomNick()).startsWith(search)) {
+            matched = true;
+            customMatched.add(user);
+        }
+
+        if (matched) {
+            matchedUsers.add(user);
+        }
     }
 
     /**

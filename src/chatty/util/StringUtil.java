@@ -1,12 +1,18 @@
 
 package chatty.util;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -300,6 +306,151 @@ public class StringUtil {
             }
         }
         return b.toString();
+    }
+    
+    public static List<String> split(String input, char splitAt, int limit) {
+        return split(input, splitAt, '"', '\\', limit, 1);
+    }
+    
+    public static List<String> split(String input, char splitAt, int limit, int remove) {
+        return split(input, splitAt, '"', '\\', limit, remove);
+    }
+    
+    /**
+     * Split the given input String by the {@code splitAt} character. Sections
+     * enclosed in the {@code quote} character and characters prefixed by the
+     * {@code escape} character aren't checked for the {@code splitAt}
+     * character.
+     * <p>
+     * If the quote and escape characters are equal, escaping is no longer
+     * possible, only quoting, except for a quote escaping itself (double
+     * quotes) to insert a literal quote.
+     * <p>
+     * Whether quote/escape characters are removed from the result can be
+     * controlled by the {@code remove} value:
+     * <ul>
+     * <li>0 - don't remove
+     * <li>1 - remove from all parts, except result number {@code limit} (if
+     * {@code limit} > 0)
+     * <li>2 - remove from all parts
+     * </ul>
+     * 
+     * @param input The input to be split
+     * @param splitAt The split character
+     * @param quote The quote character
+     * @param escape The escape character, also used to escape the quote
+     * character and itself
+     * @param limit Maximum number of parts in the result (0 for high limit)
+     * @param remove 0 - don't remove quote/escape characters, 1 - remove from
+     * all parts (except result number "limit", if limit > 0), 2 - remove from
+     * all parts
+     * @return
+     */
+    public static List<String> split(String input, char splitAt, char quote, char escape, int limit, int remove) {
+        if (input == null) {
+            return null;
+        }
+        List<String> result = new ArrayList<>();
+        StringBuilder b = new StringBuilder();
+        boolean quoted = false;
+        boolean escaped = false;
+        int consecQuotes = 0;
+        limit = Math.abs(limit);
+        if (limit == 0) {
+            limit = Integer.MAX_VALUE;
+        }
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            
+            if (c == quote) {
+                consecQuotes++;
+            }
+            else {
+                consecQuotes = 0;
+            }
+            
+            // Add one escaped character
+            if (escaped) {
+                b.append(c);
+                escaped = false;
+            }
+            // Next character escaped
+            else if (c == escape && escape != quote) {
+                escaped = true;
+                if (remove == 0) {
+                    b.append(c);
+                }
+            }
+            // Begin and end quoted section
+            else if (c == quote) {
+                quoted = !quoted;
+                if (remove == 0 || (escape == quote && consecQuotes % 2 == 0)) {
+                    b.append(c);
+                }
+            }
+            // Split character found, ignore if quoted or max count reached
+            else if (c == splitAt && !quoted && result.size()+1 < limit) {
+                result.add(b.toString());
+                b = new StringBuilder();
+                if (result.size()+1 == limit && remove < 2) {
+                    // Add remaining text without parsing
+                    result.add(input.substring(i+1));
+                    return result;
+                }
+            }
+            // Nothing special, just add character
+            else {
+                b.append(c);
+            }
+        }
+        // Add last
+        result.add(b.toString());
+        return result;
+    }
+    
+    public static final NullComparator NULL_COMPARATOR = new NullComparator();
+    
+    private static class NullComparator implements Comparator<String> {
+
+        @Override
+        public int compare(String o1, String o2) {
+            if (o1 == null && o2 == null) {
+                return 0;
+            }
+            if (o1 == null) {
+                return 1;
+            }
+            if (o2 == null) {
+                return -1;
+            }
+            return o1.compareTo(o2);
+        }
+
+    }
+    
+    public static String stringFromInputStream(InputStream inputStream) {
+        return stringFromInputStream(inputStream, "UTF-8");
+    }
+    
+    public static String stringFromInputStream(InputStream inputStream, String charset) {
+        try (InputStream input = inputStream) {
+            ByteArrayOutputStream result = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = input.read(buffer)) != -1) {
+                result.write(buffer, 0, length);
+            }
+            return result.toString(charset);
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+    
+    public static String randomString(String[] input) {
+        if (input.length == 0) {
+            return null;
+        }
+        return input[ThreadLocalRandom.current().nextInt(input.length)];
     }
     
     public static final void main(String[] args) {

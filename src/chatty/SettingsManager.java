@@ -139,7 +139,7 @@ public class SettingsManager {
         settings.addBoolean("membershipEnabled", true);
         settings.addString("pubsub", "wss://pubsub-edge.twitch.tv");
         
-        settings.addLong("maxReconnectionAttempts", 40);
+        settings.addLong("maxReconnectionAttempts", -1);
 
         // Auto-join channels
         settings.addString("channel", "");
@@ -171,7 +171,13 @@ public class SettingsManager {
         settings.addString("laf","default");
         settings.addString("lafTheme","Default");
         settings.addMap("lafCustomTheme", new HashMap<>(), Setting.STRING);
-        
+        settings.addLong("lafFontScale", 100);
+        settings.addString("lafForeground", "#B4BEB9");
+        settings.addString("lafBackground", "#323433");
+        settings.addLong("lafGradient", 5);
+        settings.addLong("lafVariant", 0);
+        settings.addString("lafStyle", "regular");
+        settings.addString("lafScroll", "default");
         settings.addString("language", "");
         
         settings.addLong("dialogFontSize", -1);
@@ -179,6 +185,8 @@ public class SettingsManager {
         // Chat Appearance
         settings.addString("font","Consolas");
         settings.addLong("fontSize",14);
+        settings.addBoolean("timestampFontEnabled", false);
+        settings.addString("timestampFont", "Consolas 14");
         settings.addString("inputFont", "Dialog 14");
         settings.addString("userlistFont", "Dialog Bold 12");
         settings.addLong("lineSpacing", 2);
@@ -194,6 +202,7 @@ public class SettingsManager {
         settings.addLong("displayNamesMode", DISPLAY_NAMES_MODE_BOTH);
         settings.addLong("displayNamesModeUserlist", DISPLAY_NAMES_MODE_CAPITALIZED);
         settings.addBoolean("showImageTooltips", true);
+        settings.addBoolean("showTooltipImages", true);
         settings.addLong("mentions", 3);
         settings.addLong("mentionsInfo", 3);
         settings.addLong("markHoveredUser", chatty.gui.components.textpane.SettingConstants.USER_HOVER_HL_MENTIONS);
@@ -237,6 +246,9 @@ public class SettingsManager {
         settings.addString("backgroundColor2","#EAEAEA");
         settings.addBoolean("messageSeparator", false);
         settings.addString("separatorColor", "#DFDFDF");
+        settings.addBoolean("timestampColorEnabled", false);
+        settings.addString("timestampColorInherit", "off");
+        settings.addString("timestampColor", "#111111");
         settings.addString("infoColor","#001480");
         settings.addString("compactColor","#A0A0A0");
         settings.addString("inputBackgroundColor","White");
@@ -289,6 +301,7 @@ public class SettingsManager {
                 + "Delete=/delete $$(msg-id)");
         settings.addString("banReasons", "Spam\nPosting Bad Links\nBan Evasion\n"
                                 + "Hate / Harassment\nSpoilers / Backseat Gaming");
+        settings.addString("banReasonsHotkey", "");
         settings.addString("userContextMenu", "");
         settings.addString("channelContextMenu", "");
         settings.addString("streamsContextMenu", "");
@@ -296,6 +309,7 @@ public class SettingsManager {
         settings.addBoolean("closeUserDialogOnAction", true);
         settings.addBoolean("openUserDialogByMouse", true);
         settings.addBoolean("reuseUserDialog", false);
+        settings.addString("userDialogTimestamp", "[HH:mm:ss]");
         settings.addLong("clearUserMessages", 12);
 
         // History / Favorites
@@ -357,6 +371,7 @@ public class SettingsManager {
         settings.addBoolean("closeToTray", false);
         settings.addBoolean("minimizeToTray", false);
         settings.addBoolean("trayIconAlways", false);
+        settings.addBoolean("singleClickTrayOpen", true);
         
         // Window State
         settings.addMap("windows", new HashMap<>(), Setting.STRING);
@@ -374,6 +389,7 @@ public class SettingsManager {
         settings.addBoolean("titleLongerUptime", true);
         settings.addBoolean("titleShowViewerCount", true);
         settings.addBoolean("titleShowChannelState", true);
+        settings.addBoolean("titleConnections", true);
         settings.addString("titleAddition", "");
 
         // Tabs
@@ -393,6 +409,7 @@ public class SettingsManager {
         settings.addMap("bufferSizes", new HashMap<>(), Setting.LONG);
 
         settings.addString("liveStreamsSorting", "recent");
+        settings.addBoolean("liveStreamsSortingFav", true);
         settings.addLong("historyRange", 0);
         settings.addBoolean("historyVerticalZoom", false);
 
@@ -427,9 +444,6 @@ public class SettingsManager {
         //==============
         // Notifications
         //==============
-        settings.addString("highlightNotification", "either");
-        settings.addString("statusNotification", "either");
-        settings.addBoolean("ignoreOfflineNotifications", false);
         settings.addBoolean("requestFollowedStreams", true);
         
         settings.addLong("nType", NotificationSettings.NOTIFICATION_TYPE_CUSTOM);
@@ -442,6 +456,7 @@ public class SettingsManager {
         settings.addBoolean("nActivity", false);
         settings.addLong("nActivityTime", 10);
         settings.addString("nCommand", "");
+        settings.addBoolean("nHideOnStart", false);
 
         settings.addList("notifications", getDefaultNotificationSettingValue(), Setting.LIST);
         settings.addList("nColorPresets", new ArrayList<>(), Setting.LIST);
@@ -449,6 +464,7 @@ public class SettingsManager {
         settings.addBoolean("tips", true);
         settings.addLong("lastTip", 0);
         
+        settings.addList("readEvents", new ArrayList<>(), Setting.STRING);
 
         //=====================
         // Basic Chat Behaviour
@@ -506,6 +522,7 @@ public class SettingsManager {
         settings.addList("highlightBlacklist", new ArrayList(), Setting.STRING);
         settings.addBoolean("highlightMatches", true);
         settings.addBoolean("highlightMatchesAll", true);
+        settings.addBoolean("highlightByPoints", true);
 
         // Ignore
         settings.addList("ignore", new ArrayList(), Setting.STRING);
@@ -540,7 +557,7 @@ public class SettingsManager {
         settings.addString("logPath", "");
         settings.addString("logSplit", "never");
         settings.addBoolean("logSubdirectories", false);
-        settings.addString("logTimestamp", "[HH:mm:ss]");
+        settings.addString("logTimestamp", "[yyyy-MM-dd HH:mm:ss]");
         settings.addBoolean("logLockFiles", true);
         
         // TAB Completion
@@ -580,6 +597,7 @@ public class SettingsManager {
         settings.addString("cmTemplate", "{user}: {message}");
         settings.addBoolean("cmHighlightedOnly", false);
 
+        // Chat rules API removed, but keep this for now
         settings.addBoolean("rulesAutoShow", true);
         settings.addList("rulesShown", new HashSet(), Setting.STRING);
 
@@ -609,6 +627,8 @@ public class SettingsManager {
         // Auto-Unhost
         settings.addBoolean("autoUnhost", false);
         settings.addList("autoUnhostStreams", new ArrayList(), Setting.STRING);
+        
+        settings.addMap("rewards", new HashMap(), Setting.STRING);
     }
     
     /**
@@ -910,8 +930,8 @@ public class SettingsManager {
      * @return 
      */
     private List<List> getDefaultNotificationSettingValue() {
-        String hl = settings.getString("highlightNotification");
-        String st = settings.getString("statusNotification");
+        String hl = "either";
+        String st = "either";
         
         Notification.Builder hlNew = new Notification.Builder(Notification.Type.HIGHLIGHT);
         hlNew.setForeground(Color.BLACK);
@@ -922,9 +942,6 @@ public class SettingsManager {
         stNew.setForeground(Color.BLACK);
         stNew.setBackground(HtmlColors.decode("#FFFFF0"));
         stNew.setDesktopEnabled(convertOldState(st));
-        if (settings.getBoolean("ignoreOfflineNotifications")) {
-            stNew.setOptions(Arrays.asList("noOffline"));
-        }
         
         List<List> result = new ArrayList<>();
         result.add(new Notification(hlNew).toList());

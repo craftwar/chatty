@@ -10,7 +10,7 @@
         | <a href="#Chat_Colors">Chat Colors</a>
         | <a href="#Message_Colors">Message Colors</a>
         | <a href="#Usercolors">Usercolors</a>
-        | <a href="#Usericons">Usericons</a>
+        | <a href="#Usericons">Badges</a>
         | <a href="#Emoticons">Emoticons</a>
         | <a href="#Fonts">Fonts</a>
         | <a href="#Chat">Chat</a>
@@ -56,6 +56,9 @@
         immediately and join the channels that are favorited in the Channel
         Favorites/History dialog.</li>
     </ul>
+    
+    <h3>Directory</h3>
+    <div class="moreInfo">More information: <a href="help-guide_folders.html">Settings and other files</a></div>
     
     <h2>
         <a name="Look">Look</a>
@@ -167,27 +170,22 @@
     
     
     <h2>
-        <a name="Usericons">Usericons</a>
+        <a name="Usericons">Badges</a>
         <a href="#top" class="top">[back to menu]</a>
     </h2>
-    <h3>Usericon Settings</h3>
+    <h3>Badge Settings</h3>
     <ul>
-        <li><strong>Show Usericons</strong>: Shows badges as images instead of
+        <li><strong>Show Badges</strong>: Shows badges as images instead of
         just text</li>
-        <li><strong>Enable Custom Usericons</strong>: Use the custom icons
+        <li><strong>Enable Custom Badges</strong>: Use the custom icons
         defined in the table below</li>
-        <li><strong>Enable Bot Badge</strong>: Enables showing of the bot badge
+        <li><strong>Show Bot Badge</strong>: Enables showing of the bot badge
         for known bots. Chatty shows a single bot badge for all known bots. The
         list of bot names comes from different sources: The <code>botNames</code>
-        setting, the BTTV API and the FFZ API.
-        <ul>
-            <li><strong>BTTV</strong>: Use botnames from the BTTV API</li>
-            <li><strong>FFZ</strong>: Use botnames from the FFZ API</li>
-        </ul>
-        </li>
+        setting, the BTTV API and the FFZ API. (See also: <a href="help-setting_commands.html#bots">Setting Commands</a>)</li>
     </ul>
     
-    <h3><a name="CustomUsericons">Custom Usericons</a></h3>
+    <h3><a name="CustomUsericons">Custom Badges</a></h3>
     <p>Add entries to the table to show additional icons (<code>Addon</code>-Type)
         or replace the default icons (all other Types).</p>
     <p>The order of the entries can matter, they are looked at from the top:</p>
@@ -201,7 +199,7 @@
             matches is used.</li>
     </ul>
     
-    <h3>Custom Usericon Properties</h3>
+    <h3>Custom Badges Properties</h3>
     <dl class="dl-settings">
         <dt>Type</dt>
         <dd>A type of <code>Addon</code> will add an additional badge. All
@@ -301,7 +299,7 @@
             you can specify the new badge id/version yourself.</dd>
         
         <dd><em>Note:</em> The order of Addon-badges relative to eachother is
-            determined by the order they are added to the Custom Usericon table.</dd>
+            determined by the order they are added to the Custom Badges table.</dd>
         
         <dt>Image File</dt>
         <dd>The image to use. Must be a <code>.png</code> and is recommended to
@@ -313,7 +311,7 @@
             it and rescan to update the list.</dd>
         <dd>The <em>special image file name</em> <code>$default</code> will use
             the default image file, that would be shown without defining
-            Custom Usericons. This can be useful if you e.g. want to replace all
+            Custom Badges. This can be useful if you e.g. want to replace all
             Badge Types, except for one, so you can define that one to use the
             default.</dd>
         <dd><em>Tip:</em> You should also be able to manually enter the full
@@ -765,6 +763,10 @@
         the search text to modify the matching behaviour: <code>[text-prefix:]&lt;search&nbsp;text&gt;</code></p>
     
     <ul>
+        <li><code>text:</code> is the same as without a prefix, but can be useful
+            to make sure the text isn't interpreted as a prefix, for example
+            <code>text:start:Let's go</code> would match <code>start:Let's go</code>
+            anywhere in the message (case insensitive).</li>
         <li><code>cs:</code> makes it case-sensitive, so <code>cs:test</code>
             matches <code>test</code> but not <code>Test</code>.</li>
         <li><code>w:</code> matches at word boundaries, e.g. <code>w:anna</code>
@@ -801,12 +803,45 @@
         </li>
     </ul>
     
+    <p>All Text Matching Prefixes can be inverted (matches when it doesn't find
+        the search text) by prepending an exclamation mark, for example: <code>!start:!bet all</code>.
+        See the <a href="#Highlight_Prefix-blacklist"><code>blacklist:</code> Prefix description</a>
+        for further information on the differences between blacklisting and
+        negated matches.</p>
+    
+    <p>Additionally, several Text Matching Prefixes can be specified by prepending
+        a plus sign. In this case the value cannot contain spaces or must be
+        quoted. Example: <code>+!start:"!bet all" regi:Regular search text</code></p>
+    
+    <p>Only the main search text (no prefix or using any of the non-modified
+        Text Matching Prefixes) will mark Highlight matches in chat.</p>
+    
     <h3><a name="Highlight_Meta_Matching">Meta Prefixes (Matching)</a></h3>
-    <p>The following prefix don't match on the text itself, but define other
+    <p>The following prefixes don't match on the text itself, but define other
         things that should or should not trigger a Highlight. You can place one
         or several of these prefixes before the search text (separated by
         spaces):
-        <code>[meta-prefix:value]&nbsp;[..]&nbsp;[text-prefix:]&lt;search text&gt;</code></p>
+        <code>[meta-prefix:value]&nbsp;[..]&nbsp;[text-prefix:]&lt;search&nbsp;text&gt;</code></p>
+    
+    <p>Notes:</p>
+    <ul>
+        <li>When specifying several prefixes, all of them have to match in order
+            for the Highlight to trigger.</li>
+        <li>The same prefix can appear several times with different values (e.g.
+            <code>cat:category1 cat:category2</code>).</li>
+        <li>Prefixes can normally not contain spaces (it wouldn't be clear
+            whether the space is part of the prefix value or a separator between
+            prefixes), however you can enclose the prefix value (or part of it)
+            in quotes. Two quotes can be used to add a literal quote. Example:
+            <code>replacement:"text&nbsp;with&nbsp;""space"""</code> (meaning
+            the value is <code>text&nbsp;with&nbsp;"space"</code>)</li>
+        <li>When a prefix can have several values, they must be comma-separated
+            (without spaces). Example: <code>cat:category1,category2</code>.
+            Commas in list values can be quoted as well for them to be used
+            literally instead of as a separator.</li>
+    </ul>
+    
+    <p>Possible matching prefixes:</p>
     <ul>
         <li><code>user:</code> to specify one exact username (case-insensitive)
             which should highlight only if this user send the message, doesn't
@@ -815,20 +850,24 @@
             Behaves like the <code>regm:</code>/<code>re:</code> prefix, in that
             it always tries to match the entire username. Example:
             <code>reuser:(?i)a.*</code> would match all names starting with "a".</li>
-        <li><code>cat:</code> to specify a category the user who send the message
-        should be in (as defined in the <a href="help.html#addressbook">Addressbook</a>).</li>
-        <li><code>!cat:</code> to specify a category the user who send the message
-        can NOT be in.</li>
-        <li><code>chan:</code> to specify one or more channels the message has
-        to be send in to match (several channels are specified as comma-separated
-        list, without spaces).</li>
-        <li><code>!chan:</code> to specify one or more channels the message must
-        NOT be send in to match.</li>
-        <li><code>chanCat:</code> to specify one category the channel the message
-        was send in has to be in (as defined in the <a href="help.html#addressbook">Addressbook</a>
-        with the name of the channel, including leading #).</li>
-        <li><code>!chanCat:</code> to specify one category the channel the message
-        was send in can NOT be in.</li>
+        <li><code>cat:</code> - One or several (comma separated) <a href="help.html#addressbook">Addressbook</a>
+            categories. The user who send the message must be in at least on of them.
+            Example: <code>cat:friends,family</code></li>
+        <li><code>!cat:</code> - One or several Addressbook categories.
+            The user who send the message must <em>not</em> be in at least one of them.</li>
+        <li><code>chan:</code> - One or several channels the message must
+            have been sent in. Example: <code>chan:joshimuz,tirean</code></li>
+        <li><code>!chan:</code> - One or several channels the message must
+            <em>not</em> have been sent in.</li>
+        <li><code>chanCat:</code> - One or several <a href="help.html#addressbook">Addressbook</a>
+            categories. The channel the message was send in must be in at least
+            one of those categories (added to the Addressbook with the name of
+            the channel, including leading #).</li>
+        <li><code>!chanCat:</code> - One or several Addressbook categories. The
+            channel the message was send in must <em>not</em> be in at least one
+            of them. Example: <code>!chanCat:modding,important</code> (if
+            channel has both, the match fails), <code>!chanCat:modding !chanCat:important</code>
+            (if channel has one or both, the match fails)</li>
         <li><code>status:</code> to specify that the user has to have one of the
             given status codes (case-sensitive):
             <ul>
@@ -845,8 +884,10 @@
                     (so Broadcaster/Moderator/Global Moderator/Admin/Staff combined)</li>
                 <li><code>v</code> VIP</li>
             </ul>
-            For example: <code>status:st</code> matches
-        all subscriber and turbo users.</li>
+            For example: <code>status:sv</code> matches users that are either a
+            subscriber or a VIP (or both). <code>status:s&nbsp;status:v</code>
+            matches users that are <em>both</em> a subscriber and VIP at the
+            same time.</li>
         <li><code>!status:</code> to specify that the user must NOT have any of
             the given status codes (see <code>status:</code> for codes). For example:
             <code>!status:stM</code> matches all 'normal' users that have no
@@ -860,8 +901,37 @@
                     messages instead of regular user messages</li>
                 <li><code>config:any</code> - This item applies to both info
                     messages and regular user messages</li>
+                <li><code>config:hl</code> - Restrict matching to user messages
+                    highlighted by using channel points</li>
+                <li><code>config:b|id/version</code> - Match a Twitch Badge
+                    (version optional, if several are specified in the same
+                    <code>config:</code> prefix, only one has to match).</li>
+                <li><code>config:t|key=value</code> or <code>config:t|key=reg:value</code> -
+                    Match a message tag (value optional, if several are
+                    specified in the same <code>config:</code> prefix, only one
+                    has to match), prefix value with <code>reg:</code> to use
+                    regex matching on the value.</li>
+                <li><code>config:url</code> - Message must contain a URL (same
+                    as what is made clickable)</li>
             </ul>
         </li>
+        <li><a name="Highlight_Prefix-blacklist"><code>blacklist:</code></a> to specify one or more text patterns
+            (separated by comma) that will prevent the overall match if they
+            encompass the entire text match. Example: <code>blacklist:"!bet all" start:!bet</code>
+            will match all messages starting with <code>!bet</code> but will not
+            match <code>!bet all</code>. Can use any regular Text Matching Prefix.<br /><br />
+            This is of course similiar to using a negated text match, like
+            <code>+!text:"!bet all" start:!bet</code>, however the blacklist is
+            "passive", so while <code>+!text:"!bet all"</code> will match only
+            if <code>!bet all</code> is not present anywhere, <code>blacklist:"!bet all"</code>
+            (by itself) will <em>always</em> match because it is not actually
+            a requirement itself, it just modifies text matching requirements,
+            so technicially there is no requirement for a match.<br /><br />
+            Additionally, a negated match like <code>+!text:!cheesecake reg:^!\w+</code>
+            will prevent the match if <code>!cheesecake</code> appears anywhere
+            in the message, while <code>blacklist:!cheesecake reg:^!\w+</code>
+            will only prevent the match when it fully encompasses the regular
+            text match, so only when the message starts with <code>!cheesecake</code>.</li>
     </ul>
     
     <h3><a name="Highlight_Meta_Behaviour">Meta Prefixes (Behaviour)</a></h3>
@@ -870,6 +940,8 @@
         prefixes before the search text (separated by spaces):
         <code>[meta-prefix:value]&nbsp;[..]&nbsp;[text-prefix:]&lt;search text&gt;</code></p>
 
+    <p>See <a href="#Highlight_Meta_Matching">Meta Prefixes (Matching)</a> notes for quoting special characters.</p>
+    
     <ul>
         <li><code>color:</code> to specify a color other than the default
             Highlight color for displaying this Highlight (HTML Color Codes as
