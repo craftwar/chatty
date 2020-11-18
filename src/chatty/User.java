@@ -48,7 +48,7 @@ public class User implements Comparable<User> {
     //========
     // Basics
     //========
-    private final long createdAt = System.currentTimeMillis();
+    private long firstSeen = -1;
     private volatile String id;
     private Room room;
     
@@ -90,6 +90,7 @@ public class User implements Comparable<User> {
      * Current badges id/version. Map gets replaced, not modified.
      */
     private Map<String, String> twitchBadges;
+    private short subMonths;
     private volatile UsericonManager iconManager;
     
     //===========
@@ -205,6 +206,14 @@ public class User implements Comparable<User> {
         return null;
     }
     
+    public synchronized void setSubMonths(short months) {
+        this.subMonths = months;
+    }
+    
+    public synchronized short getSubMonths() {
+        return subMonths;
+    }
+    
     /**
      * Should probably not be set back to null, which might not be safe in
      * regards to synchronization.
@@ -278,8 +287,14 @@ public class User implements Comparable<User> {
         }
     }
     
-    public long getCreatedAt() {
-        return createdAt;
+    public synchronized long getFirstSeen() {
+        return firstSeen;
+    }
+    
+    public synchronized void setFirstSeen() {
+        if (firstSeen == -1) {
+            firstSeen = System.currentTimeMillis();
+        }
     }
     
     public synchronized int getNumberOfMessages() {
@@ -323,6 +338,7 @@ public class User implements Comparable<User> {
      * @param id 
      */
     public synchronized void addMessage(String line, boolean action, String id) {
+        setFirstSeen();
         addLine(new TextMessage(System.currentTimeMillis(), line, action, id));
         numberOfMessages++;
     }
@@ -349,14 +365,17 @@ public class User implements Comparable<User> {
     }
     
     public synchronized void addSub(String message, String text) {
+        setFirstSeen();
         addLine(new SubMessage(System.currentTimeMillis(), message, text));
     }
     
     public synchronized void addInfo(String message, String text) {
+        setFirstSeen();
         addLine(new InfoMessage(System.currentTimeMillis(), message, text));
     }
     
     public synchronized void addModAction(ModeratorActionData data) {
+        setFirstSeen();
         addLine(new ModAction(System.currentTimeMillis(), data.getCommandAndParameters()));
     }
     
@@ -378,7 +397,7 @@ public class User implements Comparable<User> {
         }
     }
     
-    private static final int BAN_INFO_WAIT = 500;
+    private static final int BAN_INFO_WAIT = 1000;
     
     private synchronized void replayCachedBanInfo() {
         if (cachedBanInfo == null) {
