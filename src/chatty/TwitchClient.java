@@ -1066,9 +1066,17 @@ public class TwitchClient {
         commands.add("changetoken", p -> {
             g.changeToken(p.getArgs());
         });
+        commands.add("loli", p -> {
+            if (p.getChannel() != null) {
+                String args = p.getArgs();
+                sendMessage(p.getChannel(), "蘿莉交出來! " + (args == null ? "" : args)
+				, false);
+            }
+        });
+        //
         // else if (command.equals("loli")) {
         //     if (c.onChannel(channel)) {
-        //         sendMessage(channel, "蘿莉交出來! " + (parameter  == null
+        //         sendMessage(p.getChannel(), "蘿莉交出來! " + (parameter  == null
 		// 			? "" : parameter)
 		// 		, true);
         //     }
