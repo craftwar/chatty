@@ -56,12 +56,11 @@ public class LivestreamerDialog extends JDialog {
     private final EditorStringSetting qualities;
     
     private final EditorStringSetting commandDef;
-    private final JCheckBox useAuth = new JCheckBox("Use Authorization (Twitch Oauth Token)");
     
     private final JTextField streamInput = new JTextField(30);
     private final JButton openStreamButton = new JButton("Open Stream");
     
-    private static final String INFO = "Streamlink is an external program "
+    private static final String INFO = "Streamlink (a fork of Livestreamer) is an external program "
             + "you have to install separately that allows you to watch "
             + "streams of many websites in a player like VLC. "
             + "[help-livestreamer:top More information..]";
@@ -145,11 +144,6 @@ public class LivestreamerDialog extends JDialog {
                 24, false, false, BASE_COMMAND_INFO);
         infoPanel.add(commandDef, gbc);
         
-        gbc = GuiUtil.makeGbc(0, 8, 1, 1, GridBagConstraints.WEST);
-        gbc.insets = new Insets(0, 5, 5, 5);
-        useAuth.setToolTipText("Supply the Oauth token Chatty uses to authorize for the stream (e.g. to watch sub-only Twitch streams)");
-        infoPanel.add(useAuth, gbc);
-        
         gbc = GuiUtil.makeGbc(0, 9, 2, 1, GridBagConstraints.WEST);
         gbc.insets = new Insets(5, 5, 0, 5);
         JLabel streamLabel = new JLabel("Enter stream name or URL (or commandline options):");
@@ -184,8 +178,6 @@ public class LivestreamerDialog extends JDialog {
                 } else if (e.getSource() == enableContextMenu) {
                     // Only save setting, loading is done from the MainGui
                     settings.setBoolean("livestreamer", enableContextMenu.isSelected());
-                } else if (e.getSource() == useAuth) {
-                    settings.setBoolean("livestreamerUseAuth", useAuth.isSelected());
                 } else if (e.getSource() == openDialog) {
                     settings.setBoolean("livestreamerShowDialog", openDialog.isSelected());
                 } else if (e.getSource() == autoCloseDialog) {
@@ -198,7 +190,6 @@ public class LivestreamerDialog extends JDialog {
         openStreamButton.addActionListener(buttonAction);
         closeButton.addActionListener(buttonAction);
         enableContextMenu.addActionListener(buttonAction);
-        useAuth.addActionListener(buttonAction);
         openDialog.addActionListener(buttonAction);
         autoCloseDialog.addActionListener(buttonAction);
         
@@ -224,7 +215,7 @@ public class LivestreamerDialog extends JDialog {
      */
     public void open(String stream, String quality) {
         if (stream != null) {
-            String url = "twitch.tv/" + stream;
+            String url = "https://twitch.tv/" + stream;
             if (!Helper.isValidChannel(stream)) {
                 url = stream;
             }
@@ -278,7 +269,6 @@ public class LivestreamerDialog extends JDialog {
         enableContextMenu.setSelected(settings.getBoolean("livestreamer"));
         this.qualities.setSettingValue(settings.getString("livestreamerQualities"));
         commandDef.setSettingValue(settings.getString("livestreamerCommand"));
-        useAuth.setSelected(settings.getBoolean("livestreamerUseAuth"));
         openDialog.setSelected(settings.getBoolean("livestreamerShowDialog"));
         autoCloseDialog.setSelected(settings.getBoolean("livestreamerAutoCloseDialog"));
     }
@@ -437,11 +427,6 @@ public class LivestreamerDialog extends JDialog {
             }
             StringBuilder command = new StringBuilder();
             command.append(makeBaseCommand());
-            if (url.contains("twitch.tv") && settings.getBoolean("livestreamerUseAuth")
-                    && !settings.getString("token").isEmpty()) {
-                command.append(" --twitch-oauth-token ");
-                command.append(settings.getString("token"));
-            }
             command.append(" ");
             command.append(url);
             if (quality != null) {
